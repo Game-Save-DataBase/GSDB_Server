@@ -1,2 +1,2 @@
-# GSDB_Web
-Implementación en Web App de GSDB
+# GSDB_Server
+Implementación del servidor de GSDB y la API REST.
