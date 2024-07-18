@@ -1,6 +1,10 @@
 const express = require('express');
 const connectDB = require('./config/db');
-const routes = require("./routes/api/books");
+const routesBooks = require("./routes/api/books");
+const routesGames = require("./routes/api/games");
+const routesPaths = require("./routes/api/paths");
+const routesPlatforms = require("./routes/api/platforms");
+const routesSaveDatas = require("./routes/api/savedatas");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 
@@ -17,7 +21,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // use the routes module as a middleware
 // for the /api/books path
 //esto es un include para que las aplicaciones que usen nuestra BBDD puedan acceder a ella por bloqueos de seguridad
-app.use("/api/books", routes);
+app.use("/api/books", routesBooks);
+app.use("/api/games", routesGames);
+app.use("/api/paths", routesPaths);
+app.use("/api/platforms", routesPlatforms);
+app.use("/api/savedatas", routesSaveDatas);
 
 // Connect Database
 connectDB();
