@@ -11,18 +11,23 @@ const mongoose = require('mongoose');
 
 const GameSchema = new mongoose.Schema({
     //Titulo del juego. El resto de info, por ahora, en otras BBDD unicamente
-    gameTitle: {
+    name: {
         type: String,
         required: true
     },
     //ID en nuestra BBDD de plataformas
     platformsID: {
-        type: [String],
+        type: [Number],
         required: true
     },
     // SAVE LOCATIONS: ID en nuestra base de datos de rutas de guardado
     savePathID: {
-        type: [String],
+        type: [Number],
+        default: ""
+    },
+    //ENTRADAS: ID de las entradas subidas relacionadas con este videojuego
+    entriesID:{
+         type: [Number],
         default: ""
     },
     //ID de otras BBDD para mas informacion

@@ -22,10 +22,35 @@ const SavesSchema = new mongoose.Schema({
         type: String,
         required:true
     },
+    //ruta en el servidor donde se guarda el archivo
     file:{
         type: String,
-        default: "sin implementar"
+        default: "",
+        required: true
+    },
+    //archivo de guardado personalizado por el usuario
+    customPath:{
+        type: String,
+        default: ""
+    },
+    //id del usuario registrado que ha realizado la subida
+    userID:{
+        type: Number,
+        required: true
+    },
+    //indica si es un archivo que no se verá por el resto de usuarios
+    private:{
+        type: Boolean,
+        required: true,
+        default: false
+    },
+    //descripcion del archivo
+    description:{
+        type: String,
+        required: true,
+        default: ""
     }
+    
 
 });
 
