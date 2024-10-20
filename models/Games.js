@@ -16,13 +16,14 @@ const GameSchema = new mongoose.Schema({
         required: true
     },
     //ID en nuestra BBDD de plataformas
+    //TODO: Cambiar nombres de esto
     platformsID: {
-        type: [Number],
+        type: [String],
         required: true
     },
-    // SAVE LOCATIONS: ID en nuestra base de datos de rutas de guardado
+    // SAVE LOCATIONS: platforms y savepath siguen el mismo orden
     savePathID: {
-        type: [Number],
+        type: [String],
         default: ""
     },
     //ENTRADAS: ID de las entradas subidas relacionadas con este videojuego

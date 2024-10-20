@@ -14,12 +14,12 @@ const mongoose = require('mongoose');
 const SavesSchema = new mongoose.Schema({
     //ID al juego en nuestra base de datos
     gameID: {
-        type: String,
+        type: Number,
         required: true
     },
     //ID a una plataforma en nuestra base de datos
     platformID:{
-        type: String,
+        type: Number,
         required:true
     },
     //ruta en el servidor donde se guarda el archivo
@@ -47,6 +47,11 @@ const SavesSchema = new mongoose.Schema({
     //descripcion del archivo
     description:{
         type: String,
+        required: true,
+        default: ""
+    },
+    postedDate:{
+        type: Date,
         required: true,
         default: ""
     }
