@@ -25,10 +25,26 @@ router.get('/', (req, res) => {
 // @access  Public
 router.get('/:id', (req, res) => {
   SaveDatas.findById(req.params.id)
-    .then(savedata => res.json(savedata))
-    .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
+  .then(savedata => res.json(savedata))
+  .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
 });
 
+
+//nuevos endpoints:
+// @route   GET api/savedatas/:gameID
+// @desc    Get all savedatas by gameID
+// @access  Public
+router.get('/game/:gameID', (req, res) => {
+  const gameID = req.params.gameID;
+  SaveDatas.find({ gameID: gameID })
+    .then(savedatas => {
+      if (savedatas.length === 0) {
+        return res.status(404).json({ nosavedatasfound: 'No savedatas found for this gameID' });
+      }
+      res.json(savedatas);
+    })
+    .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
+});
 // @route   POST api/savedatas
 // @desc    Add/save savedata
 // @access  Public
@@ -57,5 +73,6 @@ router.delete('/:id', (req, res) => {
     .then(savedata => res.json({ mgs: 'savedata entry deleted successfully' }))
     .catch(err => res.status(404).json({ error: 'No such a savedata' }));
 });
+
 
 module.exports = router;

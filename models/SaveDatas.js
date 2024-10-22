@@ -14,7 +14,7 @@ const mongoose = require('mongoose');
 const SavesSchema = new mongoose.Schema({
     //ID al juego en nuestra base de datos
     gameID: {
-        type: Number,
+        type: String,
         required: true
     },
     //ID a una plataforma en nuestra base de datos
@@ -35,7 +35,7 @@ const SavesSchema = new mongoose.Schema({
     },
     //id del usuario registrado que ha realizado la subida
     userID:{
-        type: Number,
+        type: String,
         required: true
     },
     //indica si es un archivo que no se verá por el resto de usuarios
