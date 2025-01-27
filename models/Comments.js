@@ -18,7 +18,7 @@ const CommentSchema = new mongoose.Schema({
     },
     postedDate:{
         type: Date,
-        default: Date.Now
+        default: Date.now
     },
     userID:{
         type: String,

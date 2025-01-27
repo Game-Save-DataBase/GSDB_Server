@@ -1,7 +1,41 @@
 // routes/api/savedatas.js
 
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const router = express.Router();
+
+// @route   GET api/savedatas/:saveId/images
+// @desc    Get image paths for a specific saveId
+// @access  Public
+router.get('/:saveId/images', (req, res) => {
+  const saveId = req.params.saveId;
+
+  // Ruta base donde se almacenan las imágenes
+  const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
+
+  if (!fs.existsSync(uploadDir)) {
+    return res.json({ images: [] });
+  }
+
+  fs.readdir(uploadDir, (err, files) => {
+    if (err) {
+      return res.json({ images: [] }); // Devuelve un JSON vacío si hay error al leer el directorio
+    }
+    // Filtrar las imágenes que comienzan con "scr_"
+    const imageFiles = files.filter(file => file.startsWith('scr_'));
+    // Si no se encuentran imágenes
+    if (imageFiles.length === 0) {
+      return res.json({ images: [] }); // Devuelve un JSON vacío si no se encuentran imágenes
+    }
+    // Crear un array de rutas de las imágenes
+    const imagePaths = imageFiles.map(file => `/assets/uploads/${saveId}/${file}`);
+
+    res.json({ images: imagePaths });
+  });
+});
+
+
 
 // Load savedata model
 const SaveDatas = require('../../models/savedatas');
@@ -25,8 +59,8 @@ router.get('/', (req, res) => {
 // @access  Public
 router.get('/:id', (req, res) => {
   SaveDatas.findById(req.params.id)
-  .then(savedata => res.json(savedata))
-  .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
+    .then(savedata => res.json(savedata))
+    .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
 });
 
 

@@ -36,9 +36,6 @@ router.get('/:id', (req, res) => {
 router.get('/entry/:entryID', (req, res) => {
   Comment.find({ entryID: req.params.entryID })
     .then(comments => {
-      if (comments.length === 0) {
-        return res.status(404).json({ nocommentsfound: 'No comments found for this entryID' });
-      }
       res.json(comments);
     })
     .catch(err => res.status(500).json({ error: 'Error fetching comments' }));

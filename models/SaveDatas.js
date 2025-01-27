@@ -59,8 +59,12 @@ const SavesSchema = new mongoose.Schema({
         type: Date,
         required: true,
         default: Date.now
-    }
-    
+    },
+    nDownloads:{
+        type:Number,
+        required: true,
+        default: 0
+    }   
 
 });
 

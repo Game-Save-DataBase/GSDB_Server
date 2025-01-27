@@ -6,6 +6,7 @@ const routesComments = require("./routes/api/comments");
 const routesUsers= require("./routes/api/users");
 const cors = require("cors");
 const bodyParser = require("body-parser");
+const path = require('path'); // Añade esta línea
 
 const app = express();
 
@@ -24,6 +25,11 @@ app.use("/api/games", routesGames);
 app.use("/api/savedatas", routesSaveDatas);
 app.use("/api/comments", routesComments);
 app.use("/api/users", routesUsers);
+
+
+// Configurar carpeta estática para servir archivos
+app.use('/assets', express.static(path.join(__dirname, 'assets', 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads'))); 
 
 // Connect Database
 connectDB();
