@@ -9,19 +9,19 @@ const mongoose = require('mongoose');
 
 const CommentSchema = new mongoose.Schema({
     entryID:{
-        type: Number,
+        type: String,
         required: true
     },
     previousComment:{
-        type: Number,
-        required: true
+        type: String,
+        default: ""
     },
     postedDate:{
         type: Date,
-        required: true
+        default: Date.Now
     },
     userID:{
-        type: Number,
+        type: String,
         required: true
     },
     text:{
@@ -29,13 +29,16 @@ const CommentSchema = new mongoose.Schema({
         required: true
     },
     hide:{
-        type: Boolean
+        type: Boolean,
+        default: false
     },
     reported:{
-        type: Boolean
+        type: Boolean,
+        default:false
     },
     reportReasons:{
-        type: [String]
+        type: [String],
+        default: [""]
     },
     
 });

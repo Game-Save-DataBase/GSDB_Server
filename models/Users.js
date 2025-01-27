@@ -15,7 +15,8 @@ const UserSchema = new mongoose.Schema({
     },
     //nombre de usuario con el que quiere que se le identifique publicamente
     handleName:{
-        type: String
+        type: String,
+        default: ""
     },
     mail:{
         type: String,
@@ -31,28 +32,35 @@ const UserSchema = new mongoose.Schema({
         default: false
     },
     favGames:{
-        type: [Number]
+        type: [String],
+        default: [""]
     },
     favSaves:{
-        type: [Number]
+        type: [String],
+        default: [""]
     },
     following:{
-        type:[Number]
+        type:[String],
+        default: [""]
     },
     followers:{
-        type:[Number]
+        type:[String],
+        default: [""]
     },
     entries:{
-        type: [Number]
+        type: [String],
+        default: [""]
     },
     avatar:{
-        type: String
+        type: String,
+        default: "/src/assets/users/pfp/example.png"
     },
     bio:{
         type: String
     },
     downloadHistory:{
-        type: [Number]
+        type: [String],
+        default: [""]
     }
     
 });

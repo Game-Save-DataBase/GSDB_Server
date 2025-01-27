@@ -17,7 +17,7 @@ const SavesSchema = new mongoose.Schema({
         type: String,
         required: true
     },
-    //ID a una plataforma en nuestra base de datos
+    //ID a una plataforma en nuestra base de datos (el numero en el array)
     platformID:{
         type: Number,
         required:true
@@ -44,6 +44,11 @@ const SavesSchema = new mongoose.Schema({
         required: true,
         default: false
     },
+    title:{
+        type: String,
+        required: true,
+        default: "Archivo de guardado"
+    },
     //descripcion del archivo
     description:{
         type: String,
@@ -53,7 +58,7 @@ const SavesSchema = new mongoose.Schema({
     postedDate:{
         type: Date,
         required: true,
-        default: ""
+        default: Date.now
     }
     
 

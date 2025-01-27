@@ -24,12 +24,16 @@ const GameSchema = new mongoose.Schema({
     // SAVE LOCATIONS: platforms y savepath siguen el mismo orden
     savePathID: {
         type: [String],
-        default: ""
+        default: [""]
     },
     //ENTRADAS: ID de las entradas subidas relacionadas con este videojuego
     entriesID:{
-         type: [Number],
-        default: ""
+        type: [String],
+        default: [""]
+    },
+    imagePath:{
+        type: String,
+        default: "/src/assets/games/cover/default.jpg"
     },
     //ID de otras BBDD para mas informacion
     IGDB_id: {
