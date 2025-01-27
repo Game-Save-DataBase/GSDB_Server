@@ -29,6 +29,37 @@ router.get('/:id', (req, res) => {
     .catch(err => res.status(404).json({ nocommentfound: 'No comment found' }));
 });
 
+//nueva endpoint
+// @route   GET api/comments/entry/:entryID
+// @desc    Get all comments for a specific entryID
+// @access  Public
+router.get('/entry/:entryID', (req, res) => {
+  Comment.find({ entryID: req.params.entryID })
+    .then(comments => {
+      if (comments.length === 0) {
+        return res.status(404).json({ nocommentsfound: 'No comments found for this entryID' });
+      }
+      res.json(comments);
+    })
+    .catch(err => res.status(500).json({ error: 'Error fetching comments' }));
+});
+
+//nueva endpoint
+// @route   GET api/comments/user/:userID
+// @desc    Get all comments for a specific userID
+// @access  Public
+router.get('/user/:userID', (req, res) => {
+  Comment.find({ userID: req.params.userID })
+    .then(comments => {
+      if (comments.length === 0) {
+        return res.status(404).json({ nocommentsfound: 'No comments found for this userID' });
+      }
+      res.json(comments);
+    })
+    .catch(err => res.status(500).json({ error: 'Error fetching comments' }));
+});
+
+
 // @route   POST api/comments
 // @desc    Add/save comment
 // @access  Public
