@@ -6,40 +6,40 @@ const path = require('path');
 const router = express.Router();
 const upload = require('../../config/multer');
 
-// @route   GET api/savedatas/:saveId/images
-// @desc    Get image paths for a specific saveId
+// @route   GET api/savedatas/:saveId/screenshots
+// @desc    Get screenshot paths for a specific saveId
 // @access  Public
-router.get('/:saveId/images', (req, res) => {
+router.get('/:saveId/screenshots', (req, res) => {
   const saveId = req.params.saveId;
 
   // Ruta base donde se almacenan las imágenes
   const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
 
   if (!fs.existsSync(uploadDir)) {
-    return res.json({ images: [] });
+    return res.json({ screenshots: [] });
   }
 
   fs.readdir(uploadDir, (err, files) => {
     if (err) {
-      return res.json({ images: [] }); // Devuelve un JSON vacío si hay error al leer el directorio
+      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si hay error al leer el directorio
     }
     // Filtrar las imágenes que comienzan con "scr_"
-    const imageFiles = files.filter(file => file.startsWith('scr_'));
+    const screenshotFiles = files.filter(file => file.startsWith('scr_'));
     // Si no se encuentran imágenes
-    if (imageFiles.length === 0) {
-      return res.json({ images: [] }); // Devuelve un JSON vacío si no se encuentran imágenes
+    if (screenshotFiles.length === 0) {
+      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si no se encuentran imágenes
     }
     // Crear un array de rutas de las imágenes
-    const imagePaths = imageFiles.map(file => `/assets/uploads/${saveId}/${file}`);
+    const screenshots = screenshotFiles.map(file => `/assets/uploads/${saveId}/${file}`);
 
-    res.json({ images: imagePaths });
+    res.json({ screenshots: screenshots });
   });
 });
 
-// @route   POST api/savedatas/:saveId/images
-// @desc    Upload an image for a specific saveId
+// @route   POST api/savedatas/:saveId/screenshots
+// @desc    Upload an screenshot for a specific saveId
 // @access  Public
-router.post('/:saveId/images', upload.single('image'), (req, res) => {
+router.post('/:saveId/screenshots', upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }

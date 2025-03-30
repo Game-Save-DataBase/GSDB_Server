@@ -10,40 +10,10 @@
 const mongoose = require('mongoose');
 
 const GameSchema = new mongoose.Schema({
-    //Titulo del juego. El resto de info, por ahora, en otras BBDD unicamente
-    name: {
-        type: String,
-        required: true
-    },
-    //ID en nuestra BBDD de plataformas
-    //TODO: Cambiar nombres de esto
-    platformsID: {
-        type: [String],
-        required: true
-    },
-    // SAVE LOCATIONS: platforms y savepath siguen el mismo orden
-    savePathID: {
-        type: [String],
-        default: [""]
-    },
-    //ENTRADAS: ID de las entradas subidas relacionadas con este videojuego
-    entriesID:{
-        type: [String],
-        default: [""]
-    },
-    imagePath:{
-        type: String,
-        default: "/src/assets/games/cover/default.jpg"
-    },
-    //ID de otras BBDD para mas informacion
-    IGDB_id: {
-        type: Number,
-        default: -1
-    },
-    PCGW_id: {
-        type: Number,
-        default: -1
-    }
+    title: { type: String, required: true },             //titulo del juego
+    platformsID: { type: [String], required: true },    //ID de todas las plataformas en las que existen saves para este juego
+    savesID: { type: [String], default: [""] },       //todos los ID de los saves subidos para este juego
+    cover: { type: String, default: "/assets/default/gameCover.jpg" } //ruta de la imagen caratula  
 });
 
 module.exports = Games = mongoose.model('games', GameSchema);
