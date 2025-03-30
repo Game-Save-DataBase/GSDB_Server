@@ -8,61 +8,20 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
-    //nombre del usuario
-    name: {
-        type: String,
-        required: true
-    },
-    //nombre de usuario con el que quiere que se le identifique publicamente
-    handleName:{
-        type: String,
-        default: ""
-    },
-    mail:{
-        type: String,
-        required: true
-    },
-    //indica si es un administrador de la pagina
-    admin:{
-        type: Boolean,
-        default: false
-    },
-    verified:{
-        type:Boolean,
-        default: false
-    },
-    favGames:{
-        type: [String],
-        default: [""]
-    },
-    favSaves:{
-        type: [String],
-        default: [""]
-    },
-    following:{
-        type:[String],
-        default: [""]
-    },
-    followers:{
-        type:[String],
-        default: [""]
-    },
-    entries:{
-        type: [String],
-        default: [""]
-    },
-    avatar:{
-        type: String,
-        default: "/src/assets/users/pfp/example.png"
-    },
-    bio:{
-        type: String
-    },
-    downloadHistory:{
-        type: [String],
-        default: [""]
-    }
-    
+    userName: { type: String, required: true },     //nombre del usuario
+    alias: { type: String, default: "" },           //nombre de usuario con el que quiere que se le identifique publicamente
+    mail: { type: String, required: true },         //indica si es un administrador de la pagina
+    admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
+    verified: { type: Boolean, default: false },    //indica si es un usuario verificado
+    favGames: { type: [String], default: [""] },    //lista de juegos marcados como favoritos
+    favSaves: { type: [String], default: [""] },    //lista de archivos marcados como favoritos
+    following: { type: [String], default: [""] },   //lista de usuarios a los que sigue
+    followers: { type: [String], default: [""] },   //lista de usuarios que le siguen
+    uploads: { type: [String], default: [""] },       //lista de archivos subidos por este usuario
+    pfp: { type: String, default: "/src/assets/users/pfp/example.png" }, //imagen de perfil
+    bio: { type: String, default: ""},                  //biografia/descripcion del usuario
+    downloadHistory: { type: [String], default: [""] }  //historial de descargas del usuario
+
 });
 
 module.exports = Users = mongoose.model('Users', UserSchema);

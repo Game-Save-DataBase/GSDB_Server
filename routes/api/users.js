@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 
 // Load user model
-const User = require('../../models/users');
+const User = require('../../models/Users');
 
 // @route   GET api/users/test
 // @desc    Tests users route
