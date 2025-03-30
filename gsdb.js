@@ -26,10 +26,10 @@ app.use("/api/savedatas", routesSaveDatas);
 app.use("/api/comments", routesComments);
 app.use("/api/users", routesUsers);
 
-
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
 // Configurar carpeta estática para servir archivos
-app.use('/assets', express.static(path.join(__dirname, 'assets', 'uploads')));
-app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads'))); 
+// app.use('/assets', express.static(path.join(__dirname, 'assets', 'uploads')));
+// app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads'))); 
 
 // Connect Database
 connectDB();

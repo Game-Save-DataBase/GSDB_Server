@@ -4,6 +4,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
+const upload = require('../../config/multer');
 
 // @route   GET api/savedatas/:saveId/images
 // @desc    Get image paths for a specific saveId
@@ -35,7 +36,16 @@ router.get('/:saveId/images', (req, res) => {
   });
 });
 
-
+// @route   POST api/savedatas/:saveId/images
+// @desc    Upload an image for a specific saveId
+// @access  Public
+router.post('/:saveId/images', upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+  
+  res.json({ message: 'File uploaded successfully', filePath: `/assets/uploads/${req.params.saveId}/${req.file.filename}` });
+});
 
 // Load savedata model
 const SaveDatas = require('../../models/savedatas');
@@ -107,6 +117,7 @@ router.delete('/:id', (req, res) => {
     .then(savedata => res.json({ mgs: 'savedata entry deleted successfully' }))
     .catch(err => res.status(404).json({ error: 'No such a savedata' }));
 });
+
 
 
 module.exports = router;
