@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 
 // Load comment model
-const Comment = require('../../models/comments');
+const Comment = require('../../models/Comments');
 
 // @route   GET api/comments/test
 // @desc    Tests comments route
@@ -30,11 +30,11 @@ router.get('/:id', (req, res) => {
 });
 
 //nueva endpoint
-// @route   GET api/comments/entry/:entryID
-// @desc    Get all comments for a specific entryID
+// @route   GET api/comments/save/:saveID
+// @desc    Get all comments for a specific saveID
 // @access  Public
-router.get('/entry/:entryID', (req, res) => {
-  Comment.find({ entryID: req.params.entryID })
+router.get('/save/:saveID', (req, res) => {
+  Comment.find({ saveID: req.params.saveID })
     .then(comments => {
       res.json(comments);
     })
