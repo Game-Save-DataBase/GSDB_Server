@@ -3,7 +3,7 @@ const connectDB = require('./config/db');
 const routesGames = require("./routes/api/games");
 const routesSaveDatas = require("./routes/api/savedatas");
 const routesComments = require("./routes/api/comments");
-const routesUsers= require("./routes/api/users");
+const routesUsers = require("./routes/api/users");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require('path'); // Añade esta línea
@@ -27,6 +27,27 @@ app.use("/api/comments", routesComments);
 app.use("/api/users", routesUsers);
 
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+// Ruta para comprobar la conexión con la API
+app.all('/api', (req, res) => {
+    res.json({
+      msg: 'GSDB API is running',
+      timestamp: Date.now()
+    });
+  });
+// get para gestion de errores cuando no existe la ruta
+app.all('/api/*', async (req, res) => {
+    try {
+        res.status(404).json({
+            timestamp: Date.now(),
+            msg: 'no route matches your request',
+            code: 404
+        })
+    } catch (e) {
+        throw new Error(e)
+    }
+
+})
 // Configurar carpeta estática para servir archivos
 // app.use('/assets', express.static(path.join(__dirname, 'assets', 'uploads')));
 // app.use('/uploads', express.static(path.join(__dirname, 'assets', 'uploads'))); 
