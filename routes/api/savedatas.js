@@ -80,8 +80,6 @@ router.post('/', uploadSaveFile.single('file'), async (req, res) => {
 
     // Ruta de destino del archivo
     const originalPath = req.file.path;
-    const fileExt = path.extname(req.file.filename);
-    const newFileName = 'save' + fileExt;
     const newFilePath = path.join(saveFolder, req.file.filename);
 
     // Mover archivo
@@ -114,11 +112,28 @@ router.put('/:id', (req, res) => {
 // @route   DELETE api/savedatas/:id
 // @desc    Delete savedata by id
 // @access  Public
-router.delete('/:id', (req, res) => {
-  SaveDatas.findByIdAndDelete(req.params.id)
-    .then(savedata => res.json({ mgs: 'savedata entry deleted successfully' }))
-    .catch(err => res.status(404).json({ error: 'No such a savedata' }));
+router.delete('/:id', async (req, res) => {
+  try {
+    const savedata = await SaveDatas.findByIdAndDelete(req.params.id);
+    if (!savedata) {
+      return res.status(404).json({ error: 'Savedata not found' });
+    }
+
+    // 🧹 Eliminar carpeta asociada al savedata
+    const screenshotFolder = path.join(__dirname, '../../assets/uploads', savedata._id.toString());
+
+    if (fs.existsSync(screenshotFolder)) {
+      fs.rmSync(screenshotFolder, { recursive: true, force: true });
+    }
+
+    res.json({ message: 'Savedata and associated files deleted' });
+
+  } catch (err) {
+    console.error("Error deleting savedata:", err);
+    res.status(500).json({ error: 'Unable to delete data' });
+  }
 });
+
 
 
 //      SCREENSHOTS
