@@ -4,7 +4,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
-const upload = require('../../config/multer');
+const {uploadScreenshot, uploadSaveFile} = require('../../config/multer');
 // Load savedata model
 const SaveDatas = require('../../models/savedatas');
 
@@ -54,38 +54,28 @@ router.get('/game/:gameID', (req, res) => {
 // @route   POST api/savedatas
 // @desc    Create savedata
 // @access  Public
-router.post('/', upload.single('file'), (req, res) => {
+router.post('/', uploadSaveFile.single('file'), (req, res) => {
+  console.log(req.file); // Verifica que el archivo esté presente
 
-  console.log(req.file);  // Verifica que el archivo está en el objeto req.file
-
-  const { title, gameID, platformID, description, userID } = req.body;
-
-  // Verificar que se haya subido un archivo
+  // Asegúrate de que req.file esté definido antes de usarlo
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  // Crear la ruta del archivo
-  const filePath = `/assets/uploads/${req.file.filename}`;
-
-  // Crear un nuevo savedata con los datos recibidos
-  const newSaveData = new SaveDatas({
-    title,
-    gameID,
-    platformID,
-    description,
-    userID,
-    file: filePath,  // Guardar la ruta del archivo en la base de datos
+  // Crear un nuevo savedata con la ruta del archivo
+  const newSavedata = new SaveDatas({
+    title: req.body.title,
+    gameID: req.body.gameID,
+    platformID: req.body.platformID,
+    description: req.body.description,
+    userID: req.body.userID,
+    file: `/assets/uploads/${req.file.filename}`,  // Aquí está la ruta del archivo
   });
 
-  // Guardar el nuevo savedata en la base de datos
-  newSaveData
-    .save()
+  newSavedata.save()
     .then(savedata => res.json(savedata))
-    .catch(err => res.status(400).json({ error: 'Error saving the savedata' }));
+    .catch(err => res.status(400).json({ error: 'Unable to save data' }));
 });
-
-module.exports = router;
 
 
 // @route   PUT api/savedatas/:id
@@ -144,7 +134,7 @@ router.get('/:saveId/screenshots', (req, res) => {
 // @route   POST api/savedatas/:saveId/screenshots
 // @desc    Upload an screenshot for a specific saveId
 // @access  Public
-router.post('/:saveId/screenshots', upload.single('image'), (req, res) => {
+router.post('/:saveId/screenshots', uploadScreenshot.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
