@@ -149,7 +149,11 @@ router.get('/:id/download', async (req, res) => {
       return res.status(404).json({ error: 'El archivo no existe en el servidor' });
     }
 
-    // 👉 Esta línea fuerza la descarga
+    // Incrementar contador de descargas
+    saveData.nDownloads = (saveData.nDownloads || 0) + 1;
+    await saveData.save();
+    
+    // Fuerza la descarga
     res.download(filePath, path.basename(saveData.file));
 
   } catch (err) {
