@@ -54,27 +54,49 @@ router.get('/game/:gameID', (req, res) => {
 // @route   POST api/savedatas
 // @desc    Create savedata
 // @access  Public
-router.post('/', uploadSaveFile.single('file'), (req, res) => {
-  console.log(req.file); // Verifica que el archivo esté presente
+router.post('/', uploadSaveFile.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
 
-  // Asegúrate de que req.file esté definido antes de usarlo
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
+    // Primero, creamos el documento con ruta temporal
+    const newSavedata = new SaveDatas({
+      title: req.body.title,
+      gameID: req.body.gameID,
+      platformID: req.body.platformID,
+      description: req.body.description,
+      userID: req.body.userID,
+      file: '', // Ruta temporal, la actualizaremos luego
+    });
+
+    const savedata = await newSavedata.save();
+
+    // Crear carpeta con el _id
+    const saveFolder = path.join(__dirname, '../../assets/uploads', savedata._id.toString());
+    if (!fs.existsSync(saveFolder)) {
+      fs.mkdirSync(saveFolder, { recursive: true });
+    }
+
+    // Ruta de destino del archivo
+    const originalPath = req.file.path;
+    const fileExt = path.extname(req.file.filename);
+    const newFileName = 'save' + fileExt;
+    const newFilePath = path.join(saveFolder, req.file.filename);
+
+    // Mover archivo
+    fs.renameSync(originalPath, newFilePath);
+
+    // Actualizar la ruta en el documento
+    savedata.file = `/assets/uploads/${savedata._id}/${req.file.filename}`;
+    await savedata.save();
+
+    res.json(savedata);
+
+  } catch (err) {
+    console.error("Error saving savedata:", err);
+    res.status(400).json({ error: 'Unable to save data' });
   }
-
-  // Crear un nuevo savedata con la ruta del archivo
-  const newSavedata = new SaveDatas({
-    title: req.body.title,
-    gameID: req.body.gameID,
-    platformID: req.body.platformID,
-    description: req.body.description,
-    userID: req.body.userID,
-    file: `/assets/uploads/${req.file.filename}`,  // Aquí está la ruta del archivo
-  });
-
-  newSavedata.save()
-    .then(savedata => res.json(savedata))
-    .catch(err => res.status(400).json({ error: 'Unable to save data' }));
 });
 
 
