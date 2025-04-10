@@ -135,6 +135,28 @@ router.delete('/:id', async (req, res) => {
 });
 
 
+router.get('/:id/download', async (req, res) => {
+  try {
+    const saveData = await SaveDatas.findById(req.params.id);
+    if (!saveData || !saveData.file) {
+      return res.status(404).json({ error: 'Archivo no encontrado' });
+    }
+
+    const filePath = path.join(__dirname, '../../assets/uploads', saveData._id.toString(), path.basename(saveData.file));
+    
+    // Verifica si el archivo existe
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'El archivo no existe en el servidor' });
+    }
+
+    // 👉 Esta línea fuerza la descarga
+    res.download(filePath, path.basename(saveData.file));
+
+  } catch (err) {
+    console.error("Error al descargar archivo:", err);
+    res.status(500).json({ error: 'Error al procesar la descarga' });
+  }
+});
 
 //      SCREENSHOTS
 
