@@ -13,7 +13,6 @@ const authenticateMW = require('../../middleware/authMW'); // <== middleware
 // @access  Public
 router.get('/test', (req, res) => res.send('savedata route testing!'));
 
-router.use(authenticateMW);
 
 // Load savedata model
 const SaveDatas = require('../../models/savedatas');
@@ -52,6 +51,42 @@ router.get('/game/:gameID', (req, res) => {
     })
     .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
 });
+
+
+
+//      SCREENSHOTS
+
+// @route   GET api/savedatas/:saveId/screenshots
+// @desc    Get screenshot paths for a specific saveId
+// @access  Public
+router.get('/:saveId/screenshots', (req, res) => {
+  const saveId = req.params.saveId;
+
+  // Ruta base donde se almacenan las imágenes
+  const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
+
+  if (!fs.existsSync(uploadDir)) {
+    return res.json({ screenshots: [] });
+  }
+
+  fs.readdir(uploadDir, (err, files) => {
+    if (err) {
+      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si hay error al leer el directorio
+    }
+    // Filtrar las imágenes que comienzan con "scr_"
+    const screenshotFiles = files.filter(file => file.startsWith('scr_'));
+    // Si no se encuentran imágenes
+    if (screenshotFiles.length === 0) {
+      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si no se encuentran imágenes
+    }
+    // Crear un array de rutas de las imágenes
+    const screenshots = screenshotFiles.map(file => `/assets/uploads/${saveId}/${file}`);
+
+    res.json({ screenshots: screenshots });
+  });
+});
+
+router.use(authenticateMW);
 
 // @route   POST api/savedatas
 // @desc    Create savedata
@@ -164,37 +199,7 @@ router.get('/:id/download', async (req, res) => {
   }
 });
 
-//      SCREENSHOTS
 
-// @route   GET api/savedatas/:saveId/screenshots
-// @desc    Get screenshot paths for a specific saveId
-// @access  Public
-router.get('/:saveId/screenshots', (req, res) => {
-  const saveId = req.params.saveId;
-
-  // Ruta base donde se almacenan las imágenes
-  const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
-
-  if (!fs.existsSync(uploadDir)) {
-    return res.json({ screenshots: [] });
-  }
-
-  fs.readdir(uploadDir, (err, files) => {
-    if (err) {
-      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si hay error al leer el directorio
-    }
-    // Filtrar las imágenes que comienzan con "scr_"
-    const screenshotFiles = files.filter(file => file.startsWith('scr_'));
-    // Si no se encuentran imágenes
-    if (screenshotFiles.length === 0) {
-      return res.json({ screenshots: [] }); // Devuelve un JSON vacío si no se encuentran imágenes
-    }
-    // Crear un array de rutas de las imágenes
-    const screenshots = screenshotFiles.map(file => `/assets/uploads/${saveId}/${file}`);
-
-    res.json({ screenshots: screenshots });
-  });
-});
 
 // @route   POST api/savedatas/:saveId/screenshots
 // @desc    Upload an screenshot for a specific saveId

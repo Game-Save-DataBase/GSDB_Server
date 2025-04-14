@@ -11,7 +11,6 @@ const Game = require('../../models/games');
 // @access  Public
 router.get('/test', (req, res) => res.send('game route testing!'));
 
-router.use(authenticateMW);
 
 
 // @route   GET api/games
@@ -31,6 +30,7 @@ router.get('/:id', (req, res) => {
     .then(game => res.json(game))
     .catch(err => res.status(404).json({ nogamefound: 'No game found' }));
 });
+router.use(authenticateMW);
 
 // @route   POST api/games
 // @desc    Add/save game
