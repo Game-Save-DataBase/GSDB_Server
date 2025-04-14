@@ -14,6 +14,7 @@ router.get('/test', (req, res) => res.send('comment route testing!'));
 
 
 
+router.use(authenticateMW);
 
 // @route   GET api/comments
 // @desc    Get all comments
@@ -60,7 +61,6 @@ router.get('/user/:userID', (req, res) => {
     .catch(err => res.status(500).json({ error: 'Error fetching comments' }));
 });
 
-router.use(authenticateMW);
 
 // @route   POST api/comments
 // @desc    Add/save comment
