@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-
+const authenticateMW = require('../../middleware/authMW'); // <== middleware
 // Load game model
 const Game = require('../../models/games');
 
@@ -10,6 +10,9 @@ const Game = require('../../models/games');
 // @desc    Tests games route
 // @access  Public
 router.get('/test', (req, res) => res.send('game route testing!'));
+
+router.use(authenticateMW);
+
 
 // @route   GET api/games
 // @desc    Get all games

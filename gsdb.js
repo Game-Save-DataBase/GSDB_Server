@@ -1,12 +1,16 @@
 const express = require('express');
+const session = require('express-session');
 const connectDB = require('./config/db');
 const routesGames = require("./routes/api/games");
 const routesSaveDatas = require("./routes/api/savedatas");
 const routesComments = require("./routes/api/comments");
 const routesUsers = require("./routes/api/users");
+const routesAuth= require("./routes/api/auth");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const path = require('path'); // Añade esta línea
+const passport = require('./config/passport');
+
 
 const app = express();
 
@@ -18,6 +22,21 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+
+// Configurar sesiones
+app.use(
+    session({
+        secret: 'secreto_super_seguro', // Cambia esto por algo más seguro
+        resave: false,
+        saveUninitialized: false,
+        cookie: { secure: false } // Cambia a true si usas HTTPS
+    })
+);
+// Inicializar Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+
 // use the routes module as a middleware
 // for the /api/books path
 //esto es un include para que las aplicaciones que usen nuestra BBDD puedan acceder a ella por bloqueos de seguridad
@@ -25,6 +44,7 @@ app.use("/api/games", routesGames);
 app.use("/api/savedatas", routesSaveDatas);
 app.use("/api/comments", routesComments);
 app.use("/api/users", routesUsers);
+app.use("/api/auth", routesAuth);
 
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 

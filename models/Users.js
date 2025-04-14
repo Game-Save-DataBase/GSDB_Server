@@ -6,11 +6,13 @@
  * */
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 
 const UserSchema = new mongoose.Schema({
     userName: { type: String, required: true },     //nombre del usuario
     alias: { type: String, default: "" },           //nombre de usuario con el que quiere que se le identifique publicamente
-    mail: { type: String, required: true },         //indica si es un administrador de la pagina
+    mail: { type: String, required: true, unique: true },         //indica si es un administrador de la pagina
+    password: { type: String, required: true },  //estara encriptada
     admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
     verified: { type: Boolean, default: false },    //indica si es un usuario verificado
     favGames: { type: [String], default: [""] },    //lista de juegos marcados como favoritos
@@ -22,6 +24,14 @@ const UserSchema = new mongoose.Schema({
     bio: { type: String, default: ""},                  //biografia/descripcion del usuario
     downloadHistory: { type: [String], default: [""] }  //historial de descargas del usuario
 
+});
+
+// Hashear la contraseña antes de guardar
+UserSchema.pre('save', async function(next) {
+    if (!this.isModified('password')) return next(); //solo hashea si ha modificado el campo contraseña
+    const salt = await bcrypt.genSalt(10); //salt = valor aleatorio
+    this.password = await bcrypt.hash(this.password, salt); //hashea la contraseña
+    next();
 });
 
 module.exports = Users = mongoose.model('Users', UserSchema);

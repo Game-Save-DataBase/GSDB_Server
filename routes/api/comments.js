@@ -2,6 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
+const authenticateMW = require('../../middleware/authMW'); // <== middleware
 
 // Load comment model
 const Comment = require('../../models/Comments');
@@ -10,6 +11,10 @@ const Comment = require('../../models/Comments');
 // @desc    Tests comments route
 // @access  Public
 router.get('/test', (req, res) => res.send('comment route testing!'));
+
+router.use(authenticateMW);
+
+
 
 // @route   GET api/comments
 // @desc    Get all comments

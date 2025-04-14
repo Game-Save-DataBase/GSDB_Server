@@ -5,6 +5,17 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const upload = require('../../config/multer');
+const authenticateMW = require('../../middleware/authMW'); // <== middleware
+
+
+// @route   GET api/savedatas/test
+// @desc    Tests savedatas route
+// @access  Public
+router.get('/test', (req, res) => res.send('savedata route testing!'));
+
+router.use(authenticateMW);
+
+
 
 // @route   GET api/savedatas/:saveId/screenshots
 // @desc    Get screenshot paths for a specific saveId
@@ -50,10 +61,6 @@ router.post('/:saveId/screenshots', upload.single('image'), (req, res) => {
 // Load savedata model
 const SaveDatas = require('../../models/savedatas');
 
-// @route   GET api/savedatas/test
-// @desc    Tests savedatas route
-// @access  Public
-router.get('/test', (req, res) => res.send('savedata route testing!'));
 
 // @route   GET api/savedatas
 // @desc    Get all savedatas
