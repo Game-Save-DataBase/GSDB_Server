@@ -1,14 +1,12 @@
 // db.js
+const config = require('../utils/config');
 
 const mongoose = require("mongoose");
-const db =
-  "mongodb+srv://gsdb_team:g6D3vHIyaBinnz3p@gsdb.l69mgmv.mongodb.net/?retryWrites=true&w=majority&appName=GSDB";
-
 mongoose.set("strictQuery", true, "useNewUrlParser", true);
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(db);
+    await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB is Connected...");
   } catch (err) {
     console.error(err.message);

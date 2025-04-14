@@ -4,6 +4,7 @@
  * ESQUEMA PARA USUARIOS
  * Contrendra la informacion de cada usuario registrado
  * */
+const config = require('../utils/config');
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
@@ -20,7 +21,7 @@ const UserSchema = new mongoose.Schema({
     following: { type: [String], default: [""] },   //lista de usuarios a los que sigue
     followers: { type: [String], default: [""] },   //lista de usuarios que le siguen
     uploads: { type: [String], default: [""] },       //lista de archivos subidos por este usuario
-    pfp: { type: String, default: "/assets/default/pfp.png" }, //imagen de perfil
+    pfp: { type: String, default: config.paths.pfp_default}, //imagen de perfil
     bio: { type: String, default: ""},                  //biografia/descripcion del usuario
     downloadHistory: { type: [String], default: [""] }  //historial de descargas del usuario
 

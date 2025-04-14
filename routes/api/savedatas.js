@@ -62,7 +62,7 @@ router.get('/game/:gameID', (req, res) => {
 router.get('/:saveId/screenshots', (req, res) => {
   const saveId = req.params.saveId;
 
-  // Ruta base donde se almacenan las imágenes
+  // Ruta relativa base donde se almacenan las imágenes
   const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
 
   if (!fs.existsSync(uploadDir)) {

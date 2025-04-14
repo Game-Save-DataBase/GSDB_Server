@@ -1,3 +1,5 @@
+const config = require('../utils/config');
+
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -6,7 +8,7 @@ const fs = require('fs');
 const screenshotStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const saveId = req.params.saveId;
-    const uploadPath = path.join(__dirname, '../assets/uploads', saveId);
+    const uploadPath = path.join(__dirname, '../'+config.paths.uploads, saveId);
 
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
@@ -22,7 +24,7 @@ const screenshotStorage = multer.diskStorage({
 // Para archivos normales de guardado
 const saveFileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../assets/uploads');
+    const uploadPath = path.join(__dirname, '../'+config.paths.uploads);
 
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
