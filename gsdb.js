@@ -32,7 +32,13 @@ app.use(
         secret: config.secretKey,
         resave: false,
         saveUninitialized: false,
-        cookie: { secure: false } // Cambia a true si usas HTTPS
+        cookie: { 
+            //.........IMPORTANTE
+            //Esto deberia ser secure: true (https) y samesite: none. En produccion deberia ser asi
+            //por ahora lo dejamos asi para usar http y permitir cookies cross-site
+            secure: false, 
+            sameSite: 'lax'
+         } // Cambia a true si usas HTTPS
     })
 );
 // Inicializar Passport
