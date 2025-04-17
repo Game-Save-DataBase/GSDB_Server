@@ -16,7 +16,7 @@ const config = {
         uploads: process.env.DIR_ASSETS+process.env.DIR_UPLOADS,
         defaults: process.env.DIR_ASSETS+process.env.DIR_DEFAULT,
         gameCover_default: process.env.DIR_ASSETS+process.env.DIR_DEFAULT + '/' + process.env.ASSET_GAMECOVER,
-        pfp_default: process.env.DIR_ASSETS+process.env.DIR_DEFAULT + '/' + process.env.ASSET_GAMECOVER
+        pfp_default: process.env.DIR_ASSETS+process.env.DIR_DEFAULT + '/' + process.env.ASSET_PFP
     },
     api:{
         api: process.env.API,

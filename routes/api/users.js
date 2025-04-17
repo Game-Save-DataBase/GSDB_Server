@@ -26,7 +26,7 @@ router.get('/', authenticateMW, (req, res) => {
 // @route   GET api/users/:id
 // @desc    Get single user by id
 // @access  Public
-router.get('/:id', authenticateMW, (req, res) => {
+router.get('/:id', (req, res) => {
   User.findById(req.params.id)
     .then(user => res.json(user))
     .catch(err => res.status(404).json({ nouserfound: 'No user found' }));

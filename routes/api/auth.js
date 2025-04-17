@@ -74,7 +74,7 @@ router.get('/me', (req, res) => {
     if (req.isAuthenticated()) {
         res.json({ user: req.user });
     } else {
-        res.status(401).json({ msg: 'No autorizado' });
+        res.status(500).json({ msg: 'Sesion no iniciada' });
     }
 });
 
