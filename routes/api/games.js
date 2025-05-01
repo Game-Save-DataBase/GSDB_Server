@@ -12,14 +12,31 @@ const Game = require('../../models/games');
 router.get('/test', (req, res) => res.send('game route testing!'));
 
 
-
 // @route   GET api/games
-// @desc    Get all games
+// @desc    Get all games or filter by multiple IDs
 // @access  Public
-router.get('/', (req, res) => {
-  Game.find()
-    .then(games => res.json(games))
-    .catch(err => res.status(404).json({ nogamesfound: 'No games found' }));
+router.get('/', async (req, res) => {
+  try {
+    const idsParam = req.query.ids;
+
+    if (idsParam) {
+      const idsArray = idsParam.split(',').map(id => id.trim());
+
+      const mongoose = require('mongoose');
+      const objectIds = idsArray.map(id => new mongoose.Types.ObjectId(id));
+
+      const games = await Game.find({ _id: { $in: objectIds } });
+
+      return res.json(games);
+    }
+
+    // Si no hay query param: devolver todos los juegos
+    const games = await Game.find();
+    res.json(games);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error fetching games' });
+  }
 });
 
 // @route   GET api/games/:id
