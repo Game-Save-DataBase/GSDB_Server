@@ -21,15 +21,15 @@ const UserSchema = new mongoose.Schema({
     following: { type: [String], default: [""] },   //lista de usuarios a los que sigue
     followers: { type: [String], default: [""] },   //lista de usuarios que le siguen
     uploads: { type: [String], default: [""] },       //lista de archivos subidos por este usuario
-    pfp: { type: String, default: config.paths.pfp_default}, //imagen de perfil
-    bio: { type: String, default: ""},                  //biografia/descripcion del usuario
+    pfp: { type: String, default: config.paths.pfp_default }, //imagen de perfil
+    bio: { type: String, default: "" },                  //biografia/descripcion del usuario
     downloadHistory: { type: [String], default: [""] }  //historial de descargas del usuario
 
 });
 
 // Hashear la contraseña antes de guardar
-UserSchema.pre('save', async function(next) {
-    if (!this.isModified('password')) return next(); //solo hashea si ha modificado el campo contraseña
+UserSchema.pre('save', async function (next) {
+    if (!this.isModified('password')) return next();
     const salt = await bcrypt.genSalt(10); //salt = valor aleatorio
     this.password = await bcrypt.hash(this.password, salt); //hashea la contraseña
     next();
