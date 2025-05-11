@@ -9,7 +9,7 @@ passport.use(
         try {
             //buscamos en bbdd un usuario que coincida con mail. como en el modelo, mail es "unique", solo puede haber uno
             const user = await User.findOne({
-                $or: [{ mail: identifier }, { userName: identifier }]
+                $or: [{ mail: identifier.toLowerCase() }, { userName: identifier.toLowerCase() }]
             });
 
             if (!user) return done(null, false, { message: 'Usuario no encontrado' });

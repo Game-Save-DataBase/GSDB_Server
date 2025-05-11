@@ -8,18 +8,22 @@ const router = express.Router();
 
 // Registro de usuario
 router.post('/register', async (req, res) => {
+    if (req.isAuthenticated()) {
+        return res.status(400).json({ msg: 'Ya estás autenticado, cierra sesión' });
+    }
     const { userName, mail, password } = req.body;
     //antes que nada usamos expresiones regulares para los valores introducidos
-    
+
     const cleanMail = mail.trim().toLowerCase();
+    const cleanUserName = userName.trim().toLowerCase();
 
     const mailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!mailRegex.test(cleanMail)) {
         return res.status(400).json({ msg: 'Correo electrónico inválido' });
     }
     const userNameRegex = /^[a-zA-Z0-9_]{4,25}$/;
-    if (!userNameRegex.test(userName)) {
-        return res.status(400).json({ msg: 'El nombre de usuario debe tener entre 4 y 25 caracteres, y contener solo letras, números o guiones bajos' });
+    if (!userNameRegex.test(cleanUserName)) {
+        return res.status(400).json({ msg: 'El nombre de usuario estar escrito en minúsuclas, debe tener entre 4 y 25 caracteres, y contener solo letras, números o guiones bajos' });
     }
     // con la libreria zxcvbn comprobamos la seguridad de la password
     const passwordStrength = zxcvbn(password);
@@ -32,20 +36,35 @@ router.post('/register', async (req, res) => {
     }
 
     try {
-        let user = await User.findOne({ $or: [{ cleanMail }, { userName }] });
+        let user = await User.findOne({ $or: [{ cleanMail }, { cleanUserName }] });
         if (user) return res.status(400).json({ msg: 'El usuario o correo electrónico ya están en uso' });
 
-        user = new User({ userName, mail: cleanMail, password: password });
+        user = new User({ userName: cleanUserName, mail: cleanMail, password: password });
         await user.save();
 
         res.status(201).json({ msg: 'Usuario registrado exitosamente' });
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        // Manejar el error de clave duplicada
+        if (err.code === 11000) {
+            // Detectamos que el error es por clave duplicada (indexado)
+            if (err.message.includes('userName')) {
+                return res.status(400).json({ msg: 'El nombre de usuario ya está en uso.' });
+            }
+            if (err.message.includes('mail')) {
+                return res.status(400).json({ msg: 'El correo electrónico ya está en uso.' });
+            }
+        }
+        // Otros errores
+        return res.status(500).json({ error: err.message });
     }
 });
 
 // Login de usuario
 router.post('/login', (req, res, next) => {
+    if (req.isAuthenticated()) {
+        return res.status(400).json({ msg: 'Ya estás autenticado, cierra sesión para cambiar de usuario.' });
+    }
+
     passport.authenticate('local', (err, user, info) => {
         if (err) return next(err);
         if (!user) return res.status(400).json({ msg: info.message });
@@ -59,6 +78,9 @@ router.post('/login', (req, res, next) => {
 
 // Logout de usuario
 router.get('/logout', (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(400).json({ msg: 'No hay sesión iniciada.' });
+    }
     req.logout(err => {
         if (err) return res.status(500).json({ error: err.message });
         req.session.destroy(() => {

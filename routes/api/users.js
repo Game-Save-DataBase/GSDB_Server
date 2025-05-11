@@ -32,11 +32,11 @@ router.get('/:id', (req, res) => {
     .then(user => res.json(user))
     .catch(err => res.status(404).json({ nouserfound: 'No user found' }));
 });
-// @route   GET api/users/:id
+// @route   GET api/users/by-username/:userName
 // @desc    Get single user by username
 // @access  Public
 router.get('/by-username/:userName', (req, res) => {
-  User.findOne({ userName: req.params.userName })
+  User.findOne({ userName: new RegExp(`^${req.params.userName}$`, 'i') }) //esto es lo mismo que hacer toLowerCase() pero con un regex
     .then(user => {
       if (!user) {
         return res.status(404).json({ nouserfound: 'No user found' });
