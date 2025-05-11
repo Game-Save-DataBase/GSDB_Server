@@ -32,6 +32,21 @@ router.get('/:id', (req, res) => {
     .then(user => res.json(user))
     .catch(err => res.status(404).json({ nouserfound: 'No user found' }));
 });
+// @route   GET api/users/:id
+// @desc    Get single user by username
+// @access  Public
+router.get('/by-username/:userName', (req, res) => {
+  User.findOne({ userName: req.params.userName })
+    .then(user => {
+      if (!user) {
+        return res.status(404).json({ nouserfound: 'No user found' });
+      }
+      res.json(user);
+    })
+    .catch(err =>
+      res.status(500).json({ error: 'Database error retrieving user' })
+    );
+});
 
 // @route   POST api/users
 // @desc    Add/save user
