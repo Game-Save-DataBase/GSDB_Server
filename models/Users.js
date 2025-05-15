@@ -25,8 +25,15 @@ const UserSchema = new mongoose.Schema({
     pfp: { type: String, default: config.paths.pfp_default }, //imagen de perfil
     banner: { type: String, default: config.paths.banner_default }, //imagen de banner de perfil
     bio: { type: String, default: "" },                  //biografia/descripcion del usuario
-    downloadHistory: { type: [String], default: [""] }  //historial de descargas del usuario
-
+    downloadHistory: { type: [String], default: [""] },  //historial de descargas del usuario
+    reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
+        type: [
+            {
+                saveID: { type: String, required: true },
+                rating: { type: String, required: true }
+            }
+        ], default: [""]
+    }
 });
 
 // Hashear la contraseña antes de guardar

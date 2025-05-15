@@ -4,7 +4,8 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
-const {uploadScreenshot, uploadSaveFile} = require('../../config/multer');
+const { buildMongoFilter } = require('../../utils/mongoutils');
+const { uploadScreenshot, uploadSaveFile } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW'); // <== middleware
 
 
@@ -15,7 +16,7 @@ router.get('/test', (req, res) => res.send('savedata route testing!'));
 
 
 // Load savedata model
-const SaveDatas = require('../../models/savedatas');
+const SaveDatas = require('../../models/SaveDatas');
 
 // @route   GET api/savedatas
 // @desc    Get all savedatas
@@ -26,13 +27,52 @@ router.get('/', (req, res) => {
     .catch(err => res.status(404).json({ nosavedatasfound: 'No savedatas found' }));
 });
 
-// @route   GET api/savedatas/:id
-// @desc    Get single savedata by id
+
+
+// @route   GET api/savedatas with filter
+// @desc    Get all savedatas with query filters
+//          query filters can use mongodb operators
 // @access  Public
-router.get('/:id', (req, res) => {
-  SaveDatas.findById(req.params.id)
-    .then(savedata => res.json(savedata))
-    .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
+router.get('/filter', async (req, res) => {
+  try {
+    const query = req.query;
+    // Si no hay parámetros en la query, devuelve todo (equivalente a GET /)
+    if (Object.keys(query).length === 0) {
+      const allSavedatas = await SaveDatas.find();
+      return res.json(allSavedatas);
+    }
+    //buscamos primero con el id de mongodb, si no, comenzamos a filtrar
+    if (query._id) {
+      const savedata = await SaveDatas.findById(query._id);
+      if (!savedata) return res.status(404).json({ msg: `Savedata with id ${query._id} not found` });
+      return res.json([savedata]);
+    }
+
+    const modelFields = {
+      userID: 'string',
+      gameID: 'string',
+      platformID: 'number',
+      private: 'boolean',
+      title: 'string',
+      description: 'string',
+      postedDate: 'date',
+      nDownloads: 'number',
+      rating: 'number'
+    };
+
+    const filter = buildMongoFilter(query, modelFields);
+
+    const savedatas = await SaveDatas.find(filter);
+
+    if (savedatas.length === 0) {
+      return res.status(404).json({ msg: 'No se encontraron savedatas con esos filtros' });
+    }
+
+    res.json(savedatas);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ msg: 'Error al buscar savedatas' });
+  }
 });
 
 
@@ -52,7 +92,30 @@ router.get('/game/:gameID', (req, res) => {
     .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
 });
 
+//nuevos endpoints:
+// @route   GET api/savedatas/:userID
+// @desc    Get all savedatas by userID
+// @access  Public
+router.get('/user/:userID', (req, res) => {
+  const userID = req.params.userID;
+  SaveDatas.find({ userID: userID })
+    .then(savedatas => {
+      if (savedatas.length === 0) {
+        return res.status(404).json({ nosavedatasfound: 'No savedatas found for this userID' });
+      }
+      res.json(savedatas);
+    })
+    .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
+});
 
+// @route   GET api/savedatas/:id
+// @desc    Get single savedata by id
+// @access  Public
+router.get('/:id', (req, res) => {
+  SaveDatas.findById(req.params.id)
+    .then(savedata => res.json(savedata))
+    .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
+});
 
 //      SCREENSHOTS
 
@@ -85,6 +148,22 @@ router.get('/:saveId/screenshots', (req, res) => {
     res.json({ screenshots: screenshots });
   });
 });
+// POST Return saves from an id array (or one element)
+
+router.post('/by-id', async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || ids.length === 0) {
+      return res.json([]); // Devuelve array vacío si no hay IDs
+    }
+    const saves = await SaveDatas.find({ _id: { $in: ids } });
+    res.json(saves);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching saves by ids', error });
+  }
+});
+
+
 
 router.use(authenticateMW);
 
@@ -180,7 +259,7 @@ router.get('/:id/download', async (req, res) => {
     }
 
     const filePath = path.join(__dirname, '../../assets/uploads', saveData._id.toString(), path.basename(saveData.file));
-    
+
     // Verifica si el archivo existe
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ error: 'El archivo no existe en el servidor' });
@@ -189,7 +268,7 @@ router.get('/:id/download', async (req, res) => {
     // Incrementar contador de descargas
     saveData.nDownloads = (saveData.nDownloads || 0) + 1;
     await saveData.save();
-    
+
     // Fuerza la descarga
     res.download(filePath, path.basename(saveData.file));
 
@@ -208,7 +287,7 @@ router.post('/:saveId/screenshots', uploadScreenshot.single('image'), (req, res)
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
-  
+
   res.json({ message: 'File uploaded successfully', filePath: `/assets/uploads/${req.params.saveId}/${req.file.filename}` });
 });
 
