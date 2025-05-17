@@ -20,4 +20,21 @@ const SavesSchema = new mongoose.Schema({
     rating: { type: Number, default: 0 } //valoracion del save
 });
 
-module.exports = SaveDatas = mongoose.model('savedatas', SavesSchema);
+/**
+ * campos del modelo por los cuales se podra filtrar y su tipo en una cadena
+ */
+const filterFields = {
+    userID: 'string',
+    gameID: 'string',
+    platformID: 'number',
+    private: 'boolean',
+    title: 'string',
+    description: 'string',
+    postedDate: 'date',
+    nDownloads: 'number',
+    rating: 'number'
+};
+
+const SaveDatas = mongoose.model('savedatas', SavesSchema);
+
+module.exports = { SaveDatas, filterFields };

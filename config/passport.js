@@ -1,8 +1,7 @@
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy; //por ahora solamente local
 const bcrypt = require('bcryptjs'); //para desencriptar de la bbdd
-const User = require('../models/Users');
-
+const { Users: User } = require('../models/Users');
 passport.use(
     //creamos nueva estrategia local. como campo usamos mail (o userName!!)
     new LocalStrategy({ usernameField: 'identifier' }, async (identifier, password, done) => {

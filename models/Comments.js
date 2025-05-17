@@ -20,4 +20,17 @@ const CommentSchema = new mongoose.Schema({
         
 });
 
-module.exports = Comments = mongoose.model('comments', CommentSchema);
+
+const filterFields ={
+    userID: 'string',
+    saveID: 'string',
+    text:'string',
+    postedDate: 'date',
+    previousComment:'string',
+    hide:'boolean',
+    reported:'boolean'
+}
+
+const Comments = mongoose.model('comments', CommentSchema);
+
+module.exports = {Comments, filterFields}

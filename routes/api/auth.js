@@ -1,7 +1,7 @@
 const express = require('express');
 const passport = require('passport');
 const bcrypt = require('bcryptjs');
-const User = require('../../models/Users');
+const { Users: User } = require('../../models/Users');
 const zxcvbn = require('zxcvbn'); //libreria para la seguridad de las contraseñas
 
 const router = express.Router();

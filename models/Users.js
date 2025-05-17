@@ -29,14 +29,27 @@ const UserSchema = new mongoose.Schema({
     reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
         type: [
             {
-                saveID: { type: String, required: true },
-                rating: { type: String, required: true }
+                saveID: { type: String },
+                rating: { type: String }
             }
         ], default: [""]
     }
 });
 
-// Hashear la contraseña antes de guardar
+/**
+ * campos del modelo por los cuales se podra filtrar y su tipo en una cadena
+ */
+const filterFields = {
+    userName: 'string',
+    alias: 'string',
+    mail: 'string',
+    admin: 'boolean',
+    verified: 'boolean',
+    rating: 'number'
+};
+
+
+// comportamientos antes de guardar
 UserSchema.pre('save', async function (next) {
     try {
         if (this.isModified('password')) {
@@ -53,4 +66,5 @@ UserSchema.pre('save', async function (next) {
 
 });
 
-module.exports = Users = mongoose.model('Users', UserSchema);
+const Users = mongoose.model('Users', UserSchema);
+module.exports = {Users, filterFields};

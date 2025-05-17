@@ -17,4 +17,11 @@ const GameSchema = new mongoose.Schema({
     cover: { type: String, default: config.paths.gameCover_default } //ruta de la imagen caratula  
 });
 
-module.exports = Games = mongoose.model('games', GameSchema);
+const filterFields = {
+    title: 'string',
+    platformsID: 'string' //aunque se guarden en un array, permitimos hacer un filtro rapido con una plataforma
+};
+
+
+const Games = mongoose.model('games', GameSchema);
+module.exports = {Games,filterFields}

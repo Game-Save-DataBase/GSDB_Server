@@ -5,123 +5,64 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const { buildMongoFilter } = require('../../utils/mongoutils');
+
 const { uploadScreenshot, uploadSaveFile } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW'); // <== middleware
-
-
-// @route   GET api/savedatas/test
-// @desc    Tests savedatas route
-// @access  Public
-router.get('/test', (req, res) => res.send('savedata route testing!'));
-
+const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
 
 // Load savedata model
-const SaveDatas = require('../../models/SaveDatas');
-
-// @route   GET api/savedatas
-// @desc    Get all savedatas
-// @access  Public
-router.get('/', (req, res) => {
-  SaveDatas.find()
-    .then(savedatas => res.json(savedatas))
-    .catch(err => res.status(404).json({ nosavedatasfound: 'No savedatas found' }));
-});
+const { SaveDatas, filterFields } = require('../../models/SaveDatas');
 
 
+/**
+ * @route GET api/savedatas/test
+ * @desc  testing, ping
+ * @access public
+ */
+router.get('/test', blockIfNotDev, (req, res) => res.send('savedata route testing! :)'));
 
-// @route   GET api/savedatas with filter
-// @desc    Get all savedatas with query filters
-//          query filters can use mongodb operators
-// @access  Public
-router.get('/filter', async (req, res) => {
+
+/**
+ * @route GET api/savedatas
+ * @params see models/savedatas
+ * @desc get all coincidences that matches with query filters. It supports mongodb operands
+ *        using no filter returns all coincidences
+ * @access public TO DO el uso del id de la base de datos no deberia ser publico para todo el mundo. Quizas deberiamos crear un id propio
+ */
+router.get('/', async (req, res) => {
   try {
     const query = req.query;
-    // Si no hay parámetros en la query, devuelve todo (equivalente a GET /)
-    if (Object.keys(query).length === 0) {
-      const allSavedatas = await SaveDatas.find();
-      return res.json(allSavedatas);
-    }
     //buscamos primero con el id de mongodb, si no, comenzamos a filtrar
     if (query._id) {
       const savedata = await SaveDatas.findById(query._id);
       if (!savedata) return res.status(404).json({ msg: `Savedata with id ${query._id} not found` });
-      return res.json([savedata]);
+      return res.json(savedata);
     }
-
-    const modelFields = {
-      userID: 'string',
-      gameID: 'string',
-      platformID: 'number',
-      private: 'boolean',
-      title: 'string',
-      description: 'string',
-      postedDate: 'date',
-      nDownloads: 'number',
-      rating: 'number'
-    };
-
-    const filter = buildMongoFilter(query, modelFields);
+      const filter = buildMongoFilter(query, filterFields);
 
     const savedatas = await SaveDatas.find(filter);
 
     if (savedatas.length === 0) {
-      return res.status(404).json({ msg: 'No se encontraron savedatas con esos filtros' });
+      return res.status(404).json({ msg: 'No coincidences' });
     }
-
-    res.json(savedatas);
+    if(savedatas.length===1){
+      return res.json(savedatas[0]);
+    }
+    return res.json(savedatas);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ msg: 'Error al buscar savedatas' });
+    if (error.name === 'InvalidQueryFields') {
+      return res.status(400).json({ msg: error.message });
+    }
+    res.status(500).json({ msg: 'Server error' });
   }
 });
 
+/**
+ * @route GET api/savedatas/:saveID/screenshots
+ * @desc Get screenshot paths for a specific saveId
+ * @access public TO DO no deberia ser accesible mas alla de la web ya que revela rutas
+ */
 
-//nuevos endpoints:
-// @route   GET api/savedatas/:gameID
-// @desc    Get all savedatas by gameID
-// @access  Public
-router.get('/game/:gameID', (req, res) => {
-  const gameID = req.params.gameID;
-  SaveDatas.find({ gameID: gameID })
-    .then(savedatas => {
-      if (savedatas.length === 0) {
-        return res.status(404).json({ nosavedatasfound: 'No savedatas found for this gameID' });
-      }
-      res.json(savedatas);
-    })
-    .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
-});
-
-//nuevos endpoints:
-// @route   GET api/savedatas/:userID
-// @desc    Get all savedatas by userID
-// @access  Public
-router.get('/user/:userID', (req, res) => {
-  const userID = req.params.userID;
-  SaveDatas.find({ userID: userID })
-    .then(savedatas => {
-      if (savedatas.length === 0) {
-        return res.status(404).json({ nosavedatasfound: 'No savedatas found for this userID' });
-      }
-      res.json(savedatas);
-    })
-    .catch(err => res.status(404).json({ error: 'Error fetching savedatas' }));
-});
-
-// @route   GET api/savedatas/:id
-// @desc    Get single savedata by id
-// @access  Public
-router.get('/:id', (req, res) => {
-  SaveDatas.findById(req.params.id)
-    .then(savedata => res.json(savedata))
-    .catch(err => res.status(404).json({ nosavedatafound: 'No savedata found' }));
-});
-
-//      SCREENSHOTS
-
-// @route   GET api/savedatas/:saveId/screenshots
-// @desc    Get screenshot paths for a specific saveId
-// @access  Public
 router.get('/:saveId/screenshots', (req, res) => {
   const saveId = req.params.saveId;
 
@@ -148,29 +89,52 @@ router.get('/:saveId/screenshots', (req, res) => {
     res.json({ screenshots: screenshots });
   });
 });
-// POST Return saves from an id array (or one element)
+
+
+/**
+ * @route POST api/savedatas/by-id
+ * @body ids = [String] :mongodb _id
+ * @params see models/savedatas
+ * @desc Get all savedatas that matches with id array. It supports query params with mongodb operands
+ * @access public TO DO no deberia ser accesible para todo el mundo ya que usa los id de la base de datos. Quizas deberiamos usar un id propio
+ */
 
 router.post('/by-id', async (req, res) => {
   try {
     const { ids } = req.body;
     if (!ids || ids.length === 0) {
-      return res.json([]); // Devuelve array vacío si no hay IDs
+      return res.json(); // Devuelve un array vacio (a diferencia del get general)
     }
-    const saves = await SaveDatas.find({ _id: { $in: ids } });
-    res.json(saves);
+    const query = req.query;
+
+    let mongoFilter = { _id: { $in: ids } };
+
+    // Añadir filtros si hay parámetros en la query
+    if (Object.keys(query).length > 0) {
+      const additionalFilter = buildMongoFilter(query, filterFields);
+      if (additionalFilter) {
+        mongoFilter = { ...mongoFilter, ...additionalFilter };
+      }
+    }
+    const saves = await SaveDatas.find(mongoFilter);
+    if(saves.length===1){
+      return res.json(saves[0]);
+    }
+    return res.json(saves);
+
   } catch (error) {
     res.status(500).json({ message: 'Error fetching saves by ids', error });
   }
 });
 
 
-
-router.use(authenticateMW);
-
-// @route   POST api/savedatas
-// @desc    Create savedata
-// @access  Public
-router.post('/', uploadSaveFile.single('file'), async (req, res) => {
+/**
+ * @route POST api/savedatas/
+ * @desc Create savedata
+ * @body see models/savedatas.sj
+ * @access auth 
+ */
+router.post('/', uploadSaveFile.single('file'), authenticateMW, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -214,10 +178,13 @@ router.post('/', uploadSaveFile.single('file'), async (req, res) => {
 });
 
 
-// @route   PUT api/savedatas/:id
-// @desc    Update savedata by id
-// @access  Public
-router.put('/:id', (req, res) => {
+/**
+ * @route PUT api/savedatas/
+ * @desc Modify savedata
+ * @body see models/savedatas.sj
+ * @access auth 
+ */
+router.put('/:id', authenticateMW, (req, res) => {
   SaveDatas.findByIdAndUpdate(req.params.id, req.body)
     .then(savedata => res.json({ msg: 'Updated successfully' }))
     .catch(err =>
@@ -225,10 +192,13 @@ router.put('/:id', (req, res) => {
     );
 });
 
-// @route   DELETE api/savedatas/:id
-// @desc    Delete savedata by id
-// @access  Public
-router.delete('/:id', async (req, res) => {
+
+/**
+ * @route DELETE api/savedatas/:id
+ * @desc Delete single savedata
+ * @access auth 
+ */
+router.delete('/:id', authenticateMW, async (req, res) => {
   try {
     const savedata = await SaveDatas.findByIdAndDelete(req.params.id);
     if (!savedata) {
@@ -251,7 +221,12 @@ router.delete('/:id', async (req, res) => {
 });
 
 
-router.get('/:id/download', async (req, res) => {
+/**
+ * @route GET api/:id/download/
+ * @desc returns server path for downloading
+ * @access auth TO DO ??? como manejamos esto, deberia ser publico, no, como devolvemos un archivo sin saber la ruta, etc
+ */
+router.get('/:id/download', authenticateMW, async (req, res) => {
   try {
     const saveData = await SaveDatas.findById(req.params.id);
     if (!saveData || !saveData.file) {
@@ -280,10 +255,13 @@ router.get('/:id/download', async (req, res) => {
 
 
 
-// @route   POST api/savedatas/:saveId/screenshots
-// @desc    Upload an screenshot for a specific saveId
-// @access  Public
-router.post('/:saveId/screenshots', uploadScreenshot.single('image'), (req, res) => {
+
+/**
+ * @route POST api/:saveID/screenshots/
+ * @desc Uploads savedata screenshots
+ * @access auth 
+ */
+router.post('/:saveId/screenshots', uploadScreenshot.single('image'), authenticateMW, (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
