@@ -9,6 +9,7 @@ const config = {
     isDevMode: process.env.DEV_MODE === 'true',
     apiVersion: process.env.API_VERSION,
     connection: process.env.GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
+    allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co'],
     //directorios utiles
     paths: {
         //no funcionara a no ser que venga precedido de connection (si se usa fuera de este proyecto)

@@ -39,7 +39,7 @@ router.get('/', async (req, res) => {
     if (comments_response.length === 0) {
       return res.status(404).json({ msg: 'No coincidences' });
     }
-    if(comments_response.length===1){
+    if (comments_response.length === 1) {
       return res.json(comments_response[0]);
     }
     return res.json(comments_response);
@@ -60,7 +60,9 @@ router.get('/', async (req, res) => {
  */
 router.post('/by-id', async (req, res) => {
   try {
-    const { ids } = req.body;
+    // Limpiamos arrays: quitamos elementos falsy (como "")
+    const ids = (req.body.ids || []).filter(id => !!id);
+
     if (!ids || ids.length === 0) {
       return res.json(); // Devuelve un array vacio (a diferencia del get general)
     }
@@ -77,7 +79,7 @@ router.post('/by-id', async (req, res) => {
       }
     }
     const comments_response = await Comments.find(mongoFilter);
-    if(comments_response.length===1){
+    if (comments_response.length === 1) {
       return res.json(comments_response[0]);
     }
     return res.json(comments_response);

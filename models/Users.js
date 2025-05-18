@@ -17,22 +17,22 @@ const UserSchema = new mongoose.Schema({
     admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
     verified: { type: Boolean, default: false },    //indica si es un usuario verificado
     rating: { type: Number, default: 0 },             //valoracion del usuario 
-    favGames: { type: [String], default: [""] },    //lista de juegos marcados como favoritos
-    favSaves: { type: [String], default: [""] },    //lista de archivos marcados como favoritos
-    following: { type: [String], default: [""] },   //lista de usuarios a los que sigue
-    followers: { type: [String], default: [""] },   //lista de usuarios que le siguen
-    uploads: { type: [String], default: [""] },       //lista de archivos subidos por este usuario
+    favGames: { type: [String], default: [] },    //lista de juegos marcados como favoritos
+    favSaves: { type: [String], default: [] },    //lista de archivos marcados como favoritos
+    following: { type: [String], default: [] },   //lista de usuarios a los que sigue
+    followers: { type: [String], default: [] },   //lista de usuarios que le siguen
+    uploads: { type: [String], default: [] },       //lista de archivos subidos por este usuario
     pfp: { type: String, default: config.paths.pfp_default }, //imagen de perfil
     banner: { type: String, default: config.paths.banner_default }, //imagen de banner de perfil
     bio: { type: String, default: "" },                  //biografia/descripcion del usuario
-    downloadHistory: { type: [String], default: [""] },  //historial de descargas del usuario
+    downloadHistory: { type: [String], default: [] },  //historial de descargas del usuario
     reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
         type: [
             {
                 saveID: { type: String },
                 rating: { type: String }
             }
-        ], default: [""]
+        ], default: []
     }
 });
 

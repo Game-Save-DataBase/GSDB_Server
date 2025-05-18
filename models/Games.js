@@ -13,7 +13,7 @@ const mongoose = require('mongoose');
 const GameSchema = new mongoose.Schema({
     title: { type: String, required: true },             //titulo del juego
     platformsID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
-    savesID: { type: [String], default: [""] },       //todos los ID de los saves subidos para este juego
+    savesID: { type: [String], default: [] },       //todos los ID de los saves subidos para este juego
     cover: { type: String, default: config.paths.gameCover_default } //ruta de la imagen caratula  
 });
 

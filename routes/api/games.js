@@ -6,7 +6,7 @@ const authenticateMW = require('../../middleware/authMW'); // <== middleware
 const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
 const { buildMongoFilter } = require('../../utils/mongoutils');
 // Load game model
-const {Games,filterFields} = require('../../models/games');
+const { Games, filterFields } = require('../../models/games');
 
 /**
  * @route GET api/comments/test
@@ -32,14 +32,14 @@ router.get('/', async (req, res) => {
       if (!game) return res.status(404).json({ msg: `Game with id ${query._id} not found` });
       return res.json(game);
     }
-      const filter = buildMongoFilter(query, filterFields);
+    const filter = buildMongoFilter(query, filterFields);
 
     const games_response = await Games.find(filter);
 
     if (games_response.length === 0) {
       return res.status(404).json({ msg: 'No coincidences' });
     }
-    if(games_response.length===1){
+    if (games_response.length === 1) {
       return res.json(games_response[0]);
     }
     return res.json(games_response);
@@ -61,11 +61,21 @@ router.get('/', async (req, res) => {
  */
 router.post('/by-id', async (req, res) => {
   try {
-    const { ids, platformsID } = req.body;
-    if ((!ids || ids.length === 0)&&(!platformsID || platformsID.length===0)) {
-      return res.json(); // Devuelve un array vacio (a diferencia del get general)
-    }
     const query = req.query;
+    // Limpiamos arrays: quitamos elementos falsy (como "")
+    let ids = (req.body.ids || [])
+    let platformsID = (req.body.platformsID || [])
+    if (!Array.isArray(ids)) {
+      ids = [ids];  // Si es string, lo convierte en array con un elemento
+    }
+    if (!Array.isArray(platformsID)) {
+      platformsID = [platformsID];  // Si es string, lo convierte en array con un elemento
+    }
+    ids = ids.filter(id => !!id);
+    platformsID = platformsID.filter(p => !!p);
+    if ((ids && ids.length === 0) && (platformsID && platformsID.length === 0)) {
+      return res.json([]); // Devuelve un array vacío si alguno está definido y vacío
+    }
 
     let mongoFilter = {
       $or: [
@@ -82,7 +92,7 @@ router.post('/by-id', async (req, res) => {
       }
     }
     const games_response = await Games.find(mongoFilter);
-    if(games_response.length === 1){
+    if (games_response.length === 1) {
       return res.json(games_response);
     }
     return res.json(games_response);
@@ -105,7 +115,7 @@ router.post('/', authenticateMW, (req, res) => {
 // @route   PUT api/games/:id
 // @desc    Update game by id
 // @access  Public
-router.put('/:id', blockIfNotDev, authenticateMW,(req, res) => {
+router.put('/:id', blockIfNotDev, authenticateMW, (req, res) => {
   Games.findByIdAndUpdate(req.params.id, req.body)
     .then(game => res.json({ msg: 'Updated successfully' }))
     .catch(err =>
@@ -116,7 +126,7 @@ router.put('/:id', blockIfNotDev, authenticateMW,(req, res) => {
 // @route   DELETE api/games/:id
 // @desc    Delete game by id
 // @access  Public
-router.delete('/:id',blockIfNotDev,authenticateMW, (req, res) => {
+router.delete('/:id', blockIfNotDev, authenticateMW, (req, res) => {
   Games.findByIdAndDelete(req.params.id)
     .then(game => res.json({ mgs: 'game entry deleted successfully' }))
     .catch(err => res.status(404).json({ error: 'No such a game' }));

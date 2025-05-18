@@ -19,7 +19,17 @@ const app = express();
 
 // use the cors middleware with the
 // origin and credentials options
-app.use(cors({ origin: true, credentials: true }));
+
+app.use(cors({
+  origin: function (origin, callback) {
+    if (!origin || config.allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 
 // use the body-parser middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());

@@ -16,7 +16,7 @@ const CommentSchema = new mongoose.Schema({
     previousComment: { type: String, default: "" }, //comentario previo (al que responde) (para ordenar como arbol)
     hide: { type: Boolean, default: false }, //indica si este comentario se debe esconder
     reported: { type: Boolean, default: false }, //indica si este comentario ha sido reportado
-    reportReasons: { type: [String], default: [""] } //indica las razones por la cual el comentario ha sido reportado
+    reportReasons: { type: [String], default: [] } //indica las razones por la cual el comentario ha sido reportado
         
 });
 

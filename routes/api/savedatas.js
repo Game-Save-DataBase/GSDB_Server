@@ -38,14 +38,14 @@ router.get('/', async (req, res) => {
       if (!savedata) return res.status(404).json({ msg: `Savedata with id ${query._id} not found` });
       return res.json(savedata);
     }
-      const filter = buildMongoFilter(query, filterFields);
+    const filter = buildMongoFilter(query, filterFields);
 
     const savedatas = await SaveDatas.find(filter);
 
     if (savedatas.length === 0) {
       return res.status(404).json({ msg: 'No coincidences' });
     }
-    if(savedatas.length===1){
+    if (savedatas.length === 1) {
       return res.json(savedatas[0]);
     }
     return res.json(savedatas);
@@ -101,7 +101,8 @@ router.get('/:saveId/screenshots', (req, res) => {
 
 router.post('/by-id', async (req, res) => {
   try {
-    const { ids } = req.body;
+    // Limpiamos arrays: quitamos elementos falsy (como "")
+    const ids = (req.body.ids || []).filter(id => !!id);
     if (!ids || ids.length === 0) {
       return res.json(); // Devuelve un array vacio (a diferencia del get general)
     }
@@ -117,7 +118,7 @@ router.post('/by-id', async (req, res) => {
       }
     }
     const saves = await SaveDatas.find(mongoFilter);
-    if(saves.length===1){
+    if (saves.length === 1) {
       return res.json(saves[0]);
     }
     return res.json(saves);

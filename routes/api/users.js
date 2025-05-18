@@ -1,10 +1,10 @@
 // routes/api/users.js
-
 const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW'); // <== middleware
 const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
 const { buildMongoFilter } = require('../../utils/mongoutils');
+
 
 // Load user model
 const { Users, filterFields } = require('../../models/Users');
@@ -40,7 +40,7 @@ router.get('/', async (req, res) => {
     if (u_response.length === 0) {
       return res.status(404).json({ msg: 'No coincidences' });
     }
-    if(u_response.length === 1){
+    if (u_response.length === 1) {
       return res.json(u_response[0]);
     }
     return res.json(u_response);
@@ -62,11 +62,13 @@ router.get('/', async (req, res) => {
  */
 router.post('/by-id', async (req, res) => {
   try {
-    const { ids, userNames } = req.body;
-    if ((!ids || ids.length === 0) && (!userNames || userNames.lenght===0)) {
-      return res.json(); // Devuelve un array vacio (a diferencia del get general)
-    }
     const query = req.query;
+    // Limpiamos arrays: quitamos elementos falsy (como "")
+    const ids = (req.body.ids || []).filter(id => !!id);
+    const userNames = (req.body.userNames || []).filter(p => !!p);
+    if ((ids && ids.length === 0) || (userNames && userNames.length === 0)) {
+      return res.json([]); // Devuelve un array vacío si alguno está definido y vacío
+    }
 
     let mongoFilter = {
       $or: [
@@ -83,7 +85,7 @@ router.post('/by-id', async (req, res) => {
       }
     }
     const u_response = await Users.find(mongoFilter);
-    if(u_response.length === 1){
+    if (u_response.length === 1) {
       return res.json(u_response[0]);
     }
     return res.json(u_response);
@@ -97,11 +99,107 @@ router.post('/by-id', async (req, res) => {
 // @route   POST api/users
 // @desc    Add/save user
 // @access  Public
-router.post('/', blockIfNotDev, (req, res) => {
+router.post('/', (req, res) => {
   Users.create(req.body)
     .then(user => res.json({ msg: 'user added successfully' }))
     .catch(err => res.status(400).json({ error: 'Unable to add this user' }));
 });
+
+
+router.post('/follow', authenticateMW, async (req, res) => {
+  //cogemos el id que hay en auth, si es el mismo que el usuario que viene en el post, no hacemos nada.
+  //si son distintos y ambos existen en base de datos, al usuario que hay en /me le añadimos un following y al usuario del post le añadimos de follower el /me
+  try {
+    const loggedUser = req.user
+    const { toFollow } = req.body;   // usuario al que se quiere seguir
+
+    if (!loggedUser) {
+      return res.status(400).json({ message: 'Not logged in' });
+    }
+    if (!toFollow) {
+      return res.status(400).json({ message: 'Invalid parameters' });
+    }
+
+    // Verificamos que ambos usuarios existan, osea, volvemos a leerlos
+    const [userToFollow] = await Promise.all([
+      Users.findById(toFollow)
+    ]);
+    
+    if (!userToFollow) {
+      return res.status(404).json({ message: `User with id ${toFollow} not found` });
+    }
+    if (loggedUser._id.toString() === userToFollow._id.toString()) {
+      return res.status(400).json({ message: 'Cannot follow yourself' });
+    }
+
+    // comprobacion de si ya existe
+    const alreadyFollowing = loggedUser.following.includes(userToFollow._id);
+    if (alreadyFollowing) {
+      return res.status(200).json({ message: 'Already following user' });
+    }
+
+    // Añadir IDs a ambos arrays
+    loggedUser.following.push(userToFollow._id);
+    userToFollow.followers.push(loggedUser._id);
+
+    // Guardamos cambios
+    await loggedUser.save();
+    await userToFollow.save();
+
+    res.status(200).json({ message: 'User followed correctly' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error following user ', error: err.message });
+  }
+});
+
+router.post('/unfollow', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const { toUnfollow } = req.body; // usuario al que se quiere dejar de seguir
+
+    if (!loggedUser) {
+      return res.status(400).json({ message: 'Not logged in' });
+    }
+    if (!toUnfollow) {
+      return res.status(400).json({ message: 'Invalid parameters' });
+    }
+
+    // Buscamos al usuario a dejar de seguir
+    const userToUnfollow = await Users.findById(toUnfollow);
+    if (!userToUnfollow) {
+      return res.status(404).json({ message: `User with id ${toUnfollow} not found` });
+    }
+
+    if (loggedUser._id.toString() === userToUnfollow._id.toString()) {
+      return res.status(400).json({ message: 'Cannot unfollow yourself' });
+    }
+
+    // Comprobamos si realmente se está siguiendo para poder eliminar
+    const isFollowing = loggedUser.following.some(followingId => followingId.toString() === userToUnfollow._id.toString());
+    if (!isFollowing) {
+      return res.status(200).json({ message: 'You are not following this user' });
+    }
+
+    // Quitamos userToUnfollow._id del array following de loggedUser
+    loggedUser.following = loggedUser.following.filter(
+      followingId => followingId.toString() !== userToUnfollow._id.toString()
+    );
+
+    // Quitamos loggedUser._id del array followers de userToUnfollow
+    userToUnfollow.followers = userToUnfollow.followers.filter(
+      followerId => followerId.toString() !== loggedUser._id.toString()
+    );
+
+    // Guardamos cambios
+    await loggedUser.save();
+    await userToUnfollow.save();
+
+    res.status(200).json({ message: 'User unfollowed correctly' });
+  } catch (err) {
+    res.status(500).json({ message: 'Error unfollowing user', error: err.message });
+  }
+});
+
 
 // @route   PUT api/users/:id
 // @desc    Update user by id

@@ -79,7 +79,7 @@ router.post('/login', (req, res, next) => {
 // Logout de usuario
 router.get('/logout', (req, res) => {
     if (!req.isAuthenticated()) {
-        return res.status(400).json({ msg: 'No hay sesión iniciada.' });
+        return res.status(401).json({ msg: 'No hay sesión iniciada.' });
     }
     req.logout(err => {
         if (err) return res.status(500).json({ error: err.message });
@@ -96,7 +96,7 @@ router.get('/me', (req, res) => {
     if (req.isAuthenticated()) {
         res.json({ user: req.user });
     } else {
-        res.status(500).json({ msg: 'Sesion no iniciada' });
+        res.status(401).json({ msg: 'Sesion no iniciada' });
     }
 });
 
