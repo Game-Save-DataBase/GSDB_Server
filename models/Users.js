@@ -59,6 +59,40 @@ UserSchema.pre('save', async function (next) {
         if (this.isModified('userName')) {
             this.userName = this.userName.toLowerCase();
         }
+        if (this.isModified('bio')) {
+            const MAX_LINES = 5;
+            const MAX_BIO_LENGTH = 500;
+
+            const bioLines = this.bio.split('\n');
+            if (bioLines.length > MAX_LINES) {
+                throw new Error(`Bio must have no more than ${MAX_LINES} lines`);
+            }
+            if (this.bio.length > MAX_BIO_LENGTH) {
+                throw new Error(`Bio must be shorter than ${MAX_BIO_LENGTH} characters`);
+            }
+
+            this.bio = bioLines.map(line => line.trim()).join('\n').trim();
+        }
+        if (this.isModified("userName")) {
+            const original = this.userName;
+            this.userName = this.userName.toLowerCase();
+
+            if (this.userName.length > 25) {
+                const err = new Error("El nombre de usuario no puede tener más de 15 caracteres.");
+                return next(err);
+            }
+
+            const valid = /^[a-z0-9_]+$/.test(this.userName);
+            if (!valid) {
+                const err = new Error("El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos.");
+                return next(err);
+            }
+
+            if (original !== this.userName) {
+                console.log(`Normalizado userName: ${original} -> ${this.userName}`);
+            }
+        }
+
         next();
     } catch (err) {
         next(err);
@@ -67,4 +101,4 @@ UserSchema.pre('save', async function (next) {
 });
 
 const Users = mongoose.model('Users', UserSchema);
-module.exports = {Users, filterFields};
+module.exports = { Users, filterFields };

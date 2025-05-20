@@ -124,7 +124,7 @@ router.post('/follow', authenticateMW, async (req, res) => {
     const [userToFollow] = await Promise.all([
       Users.findById(toFollow)
     ]);
-    
+
     if (!userToFollow) {
       return res.status(404).json({ message: `User with id ${toFollow} not found` });
     }
@@ -214,6 +214,28 @@ router.put('/:id', blockIfNotDev, async (req, res) => {
     Object.keys(req.body).forEach((key) => {
       user[key] = req.body[key];
     });
+
+    const MAX_LINES = 5;
+    const MAX_BIO_LENGTH = 500;
+
+    if (typeof req.body.bio === 'string') {
+      const lineCount = req.body.bio.split('\n').length;
+      if (lineCount > MAX_LINES) {
+        return res.status(400).json({ error: `Bio must have no more than ${MAX_LINES} lines` });
+      }
+      if (req.body.bio.length > MAX_BIO_LENGTH) {
+        return res.status(400).json({ error: `Bio must be shorter than ${MAX_BIO_LENGTH} characters` });
+      }
+
+      // Limpiar espacios innecesarios
+      req.body.bio = req.body.bio
+        .split('\n')
+        .map(line => line.trim()) // Quita espacios al inicio/final de cada línea
+        .join('\n')
+        .trim(); // Quita espacios al inicio/final del bloque
+    }
+
+
     await user.save(); // Aquí sí se ejecuta el pre('save') que usa la encriptacion
     res.json({ msg: 'Updated successfully', user });
   } catch (err) {
