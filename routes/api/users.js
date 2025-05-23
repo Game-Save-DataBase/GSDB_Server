@@ -4,7 +4,8 @@ const router = express.Router();
 const authenticateMW = require('../../middleware/authMW'); // <== middleware
 const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
 const { buildMongoFilter } = require('../../utils/mongoutils');
-
+const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
+const { uploadUserImage } = require('../../config/multer');
 
 // Load user model
 const { Users, filterFields } = require('../../models/Users');
@@ -106,6 +107,28 @@ router.post('/', (req, res) => {
 });
 
 
+router.post('/verify-password', authenticateMW, async (req, res) => {
+  try {
+    const { password } = req.body; 
+    const loggedUser = req.user;   // usuario autenticado por el middleware
+
+    if (!loggedUser) {
+      return res.status(401).json({ message: 'Not logged in' });
+    }
+
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required' });
+    }
+
+    const isValid = await bcrypt.compare(password, loggedUser.password);
+
+    res.json({ valid: isValid });
+  } catch (err) {
+    console.error('Error verifying password:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.post('/follow', authenticateMW, async (req, res) => {
   //cogemos el id que hay en auth, si es el mismo que el usuario que viene en el post, no hacemos nada.
   //si son distintos y ambos existen en base de datos, al usuario que hay en /me le añadimos un following y al usuario del post le añadimos de follower el /me
@@ -201,10 +224,32 @@ router.post('/unfollow', authenticateMW, async (req, res) => {
 });
 
 
+router.post('/:userId/upload/:type', authenticateMW, uploadUserImage.single('image'), async (req, res) => {
+  const { userId, type } = req.params;
+
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  if (!['pfp', 'banner'].includes(type)) return res.status(400).json({ error: 'Invalid image type' });
+
+  try {
+    const user = await Users.findById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const imagePath = `/assets/users/${userId}/${req.file.filename}`;
+    if (type === 'pfp') user.pfp = imagePath;
+    else if (type === 'banner') user.banner = imagePath;
+
+    await user.save();
+    res.json({ message: 'Image uploaded successfully', imageUrl: imagePath });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error while saving image path' });
+  }
+});
+
 // @route   PUT api/users/:id
 // @desc    Update user by id
 // @access  Public
-router.put('/:id', blockIfNotDev, async (req, res) => {
+router.put('/:id', authenticateMW, async (req, res) => {
   //usamos save en lugar de findbyidandupdate porque no se ejecutaria bien la encriptacion
   try {
     const user = await Users.findById(req.params.id);
@@ -242,6 +287,8 @@ router.put('/:id', blockIfNotDev, async (req, res) => {
     res.status(400).json({ error: 'Unable to update the Database' });
   }
 });
+
+
 
 // @route   DELETE api/users/:id
 // @desc    Delete user by id

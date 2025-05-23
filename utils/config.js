@@ -15,6 +15,7 @@ const config = {
         //no funcionara a no ser que venga precedido de connection (si se usa fuera de este proyecto)
         assetsFolder: process.env.DIR_ASSETS,
         uploads: process.env.DIR_ASSETS+process.env.DIR_UPLOADS,
+        userProfiles: process.env.DIR_ASSETS+process.env.DIR_USERS,
         defaults: process.env.DIR_ASSETS+process.env.DIR_DEFAULT,
         gameCover_default: process.env.DIR_ASSETS+process.env.DIR_DEFAULT + '/' + process.env.ASSET_GAMECOVER,
         pfp_default: process.env.DIR_ASSETS+process.env.DIR_DEFAULT + '/' + process.env.ASSET_PFP,
