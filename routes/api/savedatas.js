@@ -270,4 +270,15 @@ router.post('/:saveId/screenshots', uploadScreenshot.single('image'), authentica
   res.json({ message: 'File uploaded successfully', filePath: `/assets/uploads/${req.params.saveId}/${req.file.filename}` });
 });
 
+
+router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
+  try {
+    const resultado = await SaveDatas.deleteMany({});
+    res.json({ deletedCount: resultado.deletedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al borrar saves' });
+  }
+});
+
 module.exports = router;

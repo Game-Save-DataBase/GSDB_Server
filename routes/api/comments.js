@@ -124,4 +124,16 @@ router.delete('/:id', authenticateMW, (req, res) => {
     .catch(err => res.status(404).json({ error: 'No such a comment' }));
 });
 
+
+
+router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
+  try {
+    const resultado = await Comments.deleteMany({});
+    res.json({ deletedCount: resultado.deletedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al borrar comentarios' });
+  }
+});
+
 module.exports = router;

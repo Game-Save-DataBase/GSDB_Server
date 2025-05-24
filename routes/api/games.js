@@ -132,4 +132,14 @@ router.delete('/:id', blockIfNotDev, authenticateMW, (req, res) => {
     .catch(err => res.status(404).json({ error: 'No such a game' }));
 });
 
+router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
+  try {
+    const resultado = await Games.deleteMany({});
+    res.json({ deletedCount: resultado.deletedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al borrar juegos' });
+  }
+});
+
 module.exports = router;

@@ -299,4 +299,14 @@ router.delete('/:id', blockIfNotDev, (req, res) => {
     .catch(err => res.status(404).json({ error: 'No such a user' }));
 });
 
+
+router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
+  try {
+    const resultado = await Users.deleteMany({});
+    res.json({ deletedCount: resultado.deletedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Error al borrar usuarios' });
+  }
+});
 module.exports = router;
