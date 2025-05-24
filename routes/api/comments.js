@@ -1,138 +1,139 @@
-// routes/api/comments.js
-
 const express = require('express');
 const router = express.Router();
-const authenticateMW = require('../../middleware/authMW'); // <== middleware
-const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
+const authenticateMW = require('../../middleware/authMW');
+const blockIfNotDev = require('../../middleware/devModeMW');
 const { buildMongoFilter } = require('../../utils/mongoutils');
-// Load comment model
 const { Comments, filterFields } = require('../../models/Comments');
+const httpResponses = require('../../utils/httpResponses');
 
 /**
  * @route GET api/comments/test
- * @desc  testing, ping
+ * @desc testing, ping
  * @access public
  */
-router.get('/test', blockIfNotDev, (req, res) => res.send('comment route testing!'));
-
+router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'comment route testing!'));
 
 /**
  * @route GET api/comments
- * @params see models/comments
- * @desc get all coincidences that matches with query filters. It supports mongodb operands
- *        using no filter returns all coincidences
- * @access public TO DO el uso del id de la base de datos no deberia ser publico para todo el mundo. Quizas deberiamos crear un id propio
+ * @desc get comments matching query filters (supports mongodb operands)
+ * @access public
  */
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-    //buscamos primero con el id de mongodb, si no, comenzamos a filtrar
+
     if (query._id) {
       const comment = await Comments.findById(query._id);
-      if (!comment) return res.status(404).json({ msg: `Comment with id ${query._id} not found` });
-      return res.json(comment);
+      if (!comment) return httpResponses.notFound(res, `Comment with id ${query._id} not found`);
+      return httpResponses.ok(res, comment);
     }
-    const filter = buildMongoFilter(query, filterFields);
 
+    const filter = buildMongoFilter(query, filterFields);
     const comments_response = await Comments.find(filter);
 
     if (comments_response.length === 0) {
-      return res.status(404).json({ msg: 'No coincidences' });
+      return httpResponses.ok(res, []);
     }
-    if (comments_response.length === 1) {
-      return res.json(comments_response[0]);
-    }
-    return res.json(comments_response);
+
+    return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
-      return res.status(400).json({ msg: error.message });
+      return httpResponses.badRequest(res, error.message);
     }
-    res.status(500).json({ msg: 'Server error' });
+    return httpResponses.internalError(res, 'Server error', error.message);
   }
 });
 
 /**
  * @route POST api/comments/by-id
- * @body ids = [String] :mongodb _id
- * @params see models/comments
- * @desc Get all comments that matches with id. It supports query params with mongodb operands
- * @access public TO DO no deberia ser accesible para todo el mundo ya que usa los id de la base de datos. Quizas deberiamos usar un id propio
+ * @desc get comments matching by ids
+ * @access public
  */
 router.post('/by-id', async (req, res) => {
   try {
-    // Limpiamos arrays: quitamos elementos falsy (como "")
-    const ids = (req.body.ids || []).filter(id => !!id);
+    let ids = req.body.ids || [];
+    if (!Array.isArray(ids)) ids = [ids];
+    ids = ids.filter(Boolean);
 
-    if (!ids || ids.length === 0) {
-      return res.json(); // Devuelve un array vacio (a diferencia del get general)
+    if (ids.length === 0) {
+      return httpResponses.ok(res, []);
     }
-    const query = req.query;
 
+    const query = req.query;
     let mongoFilter = { _id: { $in: ids } };
 
-
-    // Añadir filtros si hay parámetros en la query
     if (Object.keys(query).length > 0) {
       const additionalFilter = buildMongoFilter(query, filterFields);
-      if (additionalFilter) {
-        mongoFilter = { ...mongoFilter, ...additionalFilter };
-      }
+      if (additionalFilter) mongoFilter = { ...mongoFilter, ...additionalFilter };
     }
-    const comments_response = await Comments.find(mongoFilter);
-    if (comments_response.length === 1) {
-      return res.json(comments_response[0]);
-    }
-    return res.json(comments_response);
 
+    const comments_response = await Comments.find(mongoFilter);
+
+    return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching comments by ids', error });
+    return httpResponses.internalError(res, 'Error fetching comments by ids', error.message);
   }
 });
-
-
-
 
 /**
  * @route POST api/comments/
  * @desc Create comment
- * @body see models/comments.js
- * @access auth 
+ * @access auth
  */
-router.post('/', authenticateMW, (req, res) => {
-  Comments.create(req.body)
-    .then(comment => res.json({ msg: 'comment added successfully' }))
-    .catch(err => res.status(400).json({ error: 'Unable to add this comment' }));
+router.post('/', authenticateMW, async (req, res) => {
+  try {
+    const comment = await Comments.create(req.body);
+    return httpResponses.created(res, 'Comment added successfully', comment);
+  } catch (err) {
+    return httpResponses.badRequest(res, 'Unable to add this comment', err.message);
+  }
 });
 
-// @route   PUT api/comments/:id
-// @desc    Update comment by id
-// @access  Public
-router.put('/:id', authenticateMW, (req, res) => {
-  Comments.findByIdAndUpdate(req.params.id, req.body)
-    .then(comment => res.json({ msg: 'Updated successfully' }))
-    .catch(err =>
-      res.status(400).json({ error: 'Unable to update the Database' })
-    );
+/**
+ * @route PUT api/comments/:id
+ * @desc Update comment by id
+ * @access auth
+ */
+router.put('/:id', authenticateMW, async (req, res) => {
+  try {
+    const updated = await Comments.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) {
+      return httpResponses.notFound(res, 'Comment not found');
+    }
+    return httpResponses.ok(res, { message: 'Updated successfully', comment: updated });
+  } catch (err) {
+    return httpResponses.badRequest(res, 'Unable to update the comment', err.message);
+  }
 });
 
-// @route   DELETE api/comments/:id
-// @desc    Delete comment by id
-// @access  Public
-router.delete('/:id', authenticateMW, (req, res) => {
-  Comments.findByIdAndDelete(req.params.id)
-    .then(comment => res.json({ mgs: 'comment entry deleted successfully' }))
-    .catch(err => res.status(404).json({ error: 'No such a comment' }));
+/**
+ * @route DELETE api/comments/:id
+ * @desc Delete comment by id
+ * @access auth
+ */
+router.delete('/:id', authenticateMW, async (req, res) => {
+  try {
+    const deleted = await Comments.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return httpResponses.notFound(res, 'Comment not found');
+    }
+    return httpResponses.ok(res, { message: 'Comment entry deleted successfully' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error deleting comment', err.message);
+  }
 });
 
-
-
+/**
+ * @route DELETE api/comments/dev/wipe
+ * @desc wipe all comments (dev only)
+ * @access dev mode only
+ */
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
-    const resultado = await Comments.deleteMany({});
-    res.json({ deletedCount: resultado.deletedCount });
+    const result = await Comments.deleteMany({});
+    return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al borrar comentarios' });
+    return httpResponses.internalError(res, 'Error wiping comments', err.message);
   }
 });
 

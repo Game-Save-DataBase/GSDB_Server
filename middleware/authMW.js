@@ -1,8 +1,10 @@
+const httpResponses = require('../utils/httpResponses');
 
-//middleware para autenticar
+// Middleware para autenticar
 module.exports = function authenticateMW(req, res, next) {
-    if (req.isAuthenticated() || process.env.DEV_MODE === 'true') {
-        return next();
-    }
-    res.status(401).json({ msg: 'No autorizado, inicia sesión' });
+  if (req.isAuthenticated() || process.env.DEV_MODE === 'true') {
+    return next();
+  }
+  return httpResponses.unauthorized(res, 'No autorizado, inicia sesión');
 };
+

@@ -1,80 +1,72 @@
-// routes/api/games.js
-
 const express = require('express');
 const router = express.Router();
-const authenticateMW = require('../../middleware/authMW'); // <== middleware
-const blockIfNotDev = require('../../middleware/devModeMW'); // middleware de devmode
+const authenticateMW = require('../../middleware/authMW');
+const blockIfNotDev = require('../../middleware/devModeMW');
 const { buildMongoFilter } = require('../../utils/mongoutils');
-// Load game model
 const { Games, filterFields } = require('../../models/games');
+const httpResponses = require('../../utils/httpResponses');
 
 /**
- * @route GET api/comments/test
- * @desc  testing, ping
+ * @route GET api/games/test
+ * @desc testing, ping
  * @access public
  */
-router.get('/test', blockIfNotDev, (req, res) => res.send('game route testing!'));
-
+router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'game route testing!'));
 
 /**
  * @route GET api/games
  * @params see models/games
- * @desc get all coincidences that matches with query filters. It supports mongodb operands
- *        using no filter returns all coincidences
- * @access public TO DO el uso del id de la base de datos no deberia ser publico para todo el mundo. Quizas deberiamos crear un id propio
+ * @desc get all coincidences matching query filters (supports mongodb operands)
+ * @access public
  */
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-    //buscamos primero con el id de mongodb, si no, comenzamos a filtrar
+
     if (query._id) {
       const game = await Games.findById(query._id);
-      if (!game) return res.status(404).json({ msg: `Game with id ${query._id} not found` });
-      return res.json(game);
+      if (!game) return httpResponses.notFound(res, `Game with id ${query._id} not found`);
+      return httpResponses.ok(res, game);
     }
-    const filter = buildMongoFilter(query, filterFields);
 
+    const filter = buildMongoFilter(query, filterFields);
     const games_response = await Games.find(filter);
 
+    // Si no hay resultados, devuelvo array vacío, no 404
     if (games_response.length === 0) {
-      return res.status(404).json({ msg: 'No coincidences' });
+      return httpResponses.ok(res, []);
     }
-    if (games_response.length === 1) {
-      return res.json(games_response[0]);
-    }
-    return res.json(games_response);
+
+    return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
-      return res.status(400).json({ msg: error.message });
+      return httpResponses.badRequest(res, error.message);
     }
-    res.status(500).json({ msg: 'Server error' });
+    return httpResponses.internalError(res, 'Server error', error.message);
   }
 });
 
-
 /**
  * @route POST api/games/by-id
- * @body ids = [String] :mongodb _id
- * @params see models/games
- * @desc Get all games that matches with id or platformID. It supports query params with mongodb operands
- * @access public TO DO no deberia ser accesible para todo el mundo ya que usa los id de la base de datos. Quizas deberiamos usar un id propio
+ * @body ids = [String], platformsID = [String]
+ * @desc get all games matching by ids or platformsID
+ * @access public
  */
 router.post('/by-id', async (req, res) => {
   try {
     const query = req.query;
-    // Limpiamos arrays: quitamos elementos falsy (como "")
-    let ids = (req.body.ids || [])
-    let platformsID = (req.body.platformsID || [])
-    if (!Array.isArray(ids)) {
-      ids = [ids];  // Si es string, lo convierte en array con un elemento
-    }
-    if (!Array.isArray(platformsID)) {
-      platformsID = [platformsID];  // Si es string, lo convierte en array con un elemento
-    }
-    ids = ids.filter(id => !!id);
-    platformsID = platformsID.filter(p => !!p);
-    if ((ids && ids.length === 0) && (platformsID && platformsID.length === 0)) {
-      return res.json([]); // Devuelve un array vacío si alguno está definido y vacío
+    let ids = req.body.ids || [];
+    let platformsID = req.body.platformsID || [];
+
+    if (!Array.isArray(ids)) ids = [ids];
+    if (!Array.isArray(platformsID)) platformsID = [platformsID];
+
+    ids = ids.filter(Boolean);
+    platformsID = platformsID.filter(Boolean);
+
+    // Si ambos arrays están vacíos, devuelvo array vacío
+    if (ids.length === 0 && platformsID.length === 0) {
+      return httpResponses.ok(res, []);
     }
 
     let mongoFilter = {
@@ -84,61 +76,80 @@ router.post('/by-id', async (req, res) => {
       ]
     };
 
-    // Añadir filtros si hay parámetros en la query
     if (Object.keys(query).length > 0) {
       const additionalFilter = buildMongoFilter(query, filterFields);
       if (additionalFilter) {
         mongoFilter = { ...mongoFilter, ...additionalFilter };
       }
     }
-    const games_response = await Games.find(mongoFilter);
-    if (games_response.length === 1) {
-      return res.json(games_response);
-    }
-    return res.json(games_response);
 
+    const games_response = await Games.find(mongoFilter);
+
+    return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
   } catch (error) {
-    res.status(500).json({ message: 'Error fetching games by ids or platform ids', error });
+    return httpResponses.internalError(res, 'Error fetching games by ids or platform ids', error.message);
   }
 });
 
-
-// @route   POST api/games
-// @desc    Add/save game
-// @access  Public
-router.post('/', authenticateMW, (req, res) => {
-  Games.create(req.body)
-    .then(game => res.json({ msg: 'game added successfully' }))
-    .catch(err => res.status(400).json({ error: 'Unable to add this game' }));
+/**
+ * @route POST api/games
+ * @desc add/save game
+ * @access public (authenticated)
+ */
+router.post('/', authenticateMW, async (req, res) => {
+  try {
+    const game = await Games.create(req.body);
+    return httpResponses.created(res, 'Game added successfully', game);
+  } catch (err) {
+    return httpResponses.badRequest(res, 'Unable to add this game', err.message);
+  }
 });
 
-// @route   PUT api/games/:id
-// @desc    Update game by id
-// @access  Public
-router.put('/:id', blockIfNotDev, authenticateMW, (req, res) => {
-  Games.findByIdAndUpdate(req.params.id, req.body)
-    .then(game => res.json({ msg: 'Updated successfully' }))
-    .catch(err =>
-      res.status(400).json({ error: 'Unable to update the Database' })
-    );
+/**
+ * @route PUT api/games/:id
+ * @desc update game by id
+ * @access public (authenticated + dev mode)
+ */
+router.put('/:id', blockIfNotDev, authenticateMW, async (req, res) => {
+  try {
+    const updated = await Games.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!updated) {
+      return httpResponses.notFound(res, 'Game not found');
+    }
+    return httpResponses.ok(res, { message: 'Updated successfully', game: updated });
+  } catch (err) {
+    return httpResponses.badRequest(res, 'Unable to update the game', err.message);
+  }
 });
 
-// @route   DELETE api/games/:id
-// @desc    Delete game by id
-// @access  Public
-router.delete('/:id', blockIfNotDev, authenticateMW, (req, res) => {
-  Games.findByIdAndDelete(req.params.id)
-    .then(game => res.json({ mgs: 'game entry deleted successfully' }))
-    .catch(err => res.status(404).json({ error: 'No such a game' }));
+/**
+ * @route DELETE api/games/:id
+ * @desc delete game by id
+ * @access public (authenticated + dev mode)
+ */
+router.delete('/:id', blockIfNotDev, authenticateMW, async (req, res) => {
+  try {
+    const deleted = await Games.findByIdAndDelete(req.params.id);
+    if (!deleted) {
+      return httpResponses.notFound(res, 'Game not found');
+    }
+    return httpResponses.ok(res, { message: 'Game entry deleted successfully' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error deleting game', err.message);
+  }
 });
 
+/**
+ * @route DELETE api/games/dev/wipe
+ * @desc wipe all games (dev only)
+ * @access dev mode only
+ */
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
-    const resultado = await Games.deleteMany({});
-    res.json({ deletedCount: resultado.deletedCount });
+    const result = await Games.deleteMany({});
+    return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Error al borrar juegos' });
+    return httpResponses.internalError(res, 'Error wiping games', err.message);
   }
 });
 
