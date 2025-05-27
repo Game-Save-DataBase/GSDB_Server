@@ -118,22 +118,7 @@ router.put('/:id', authenticateMW, async (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateMW, async (req, res) => {
-  try {
-    const savedata = await SaveDatas.findByIdAndDelete(req.params.id);
-    if (!savedata) return httpResponses.notFound(res, 'Savedata not found');
 
-    const screenshotFolder = path.join(__dirname, '../../assets/uploads', savedata._id.toString());
-    if (fs.existsSync(screenshotFolder)) {
-      fs.rmSync(screenshotFolder, { recursive: true, force: true });
-    }
-
-    return httpResponses.ok(res, { message: 'Savedata and associated files deleted' });
-  } catch (err) {
-    console.error("Error deleting savedata:", err);
-    return httpResponses.internalError(res, 'Unable to delete data');
-  }
-});
 
 router.get('/:id/download', authenticateMW, async (req, res) => {
   try {
@@ -164,14 +149,49 @@ router.post('/:saveId/screenshots', uploadScreenshot.single('image'), authentica
   });
 });
 
+
+// DELETE /:id eliminar usuario
+router.delete('/:id', authenticateMW, async (req, res) => {
+  try {
+    const deleted = await SaveDatas.findByIdAndDelete(req.params.id);
+    if (!deleted) return httpResponses.notFound(res, 'User not found');
+
+    const userFolderPath = path.join(__dirname, '..', '..', 'uploads', req.params.id);
+    try {
+      await fs.rm(userFolderPath, { recursive: true, force: true });
+    } catch (fsErr) {
+      console.error(`Error deleting folder for user ${req.params.id}:`, fsErr);
+    }
+
+    return httpResponses.ok(res, { message: 'User deleted successfully' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error deleting user');
+  }
+});
+
+
+// DELETE /dev/wipe borrar todos usuarios
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const resultado = await SaveDatas.deleteMany({});
+
+    const savesPath = path.join(__dirname, '..', '..', 'assets', 'uploads');
+    try {
+      const folders = await fs.readdir(savesPath, { withFileTypes: true });
+      const folderDeletions = folders
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => fs.rm(path.join(savesPath, dirent.name), { recursive: true, force: true }));
+      await Promise.all(folderDeletions);
+    } catch (fsErr) {
+      console.error('Error deleting saves folders:', fsErr);
+    }
+
     return httpResponses.ok(res, { deletedCount: resultado.deletedCount });
   } catch (err) {
-    console.error(err);
     return httpResponses.internalError(res, 'Error wiping saves');
   }
 });
+
+
 
 module.exports = router;

@@ -7,6 +7,9 @@ const bcrypt = require('bcryptjs');
 const { uploadUserImage } = require('../../config/multer');
 const { Users, filterFields } = require('../../models/Users');
 const httpResponses = require('../../utils/httpResponses');
+const fs = require('fs/promises');
+const path = require('path');
+
 
 // Ruta de test, dev mode
 router.get('/test', blockIfNotDev, (req, res) => res.send('user route testing!'));
@@ -214,20 +217,42 @@ router.delete('/:id', blockIfNotDev, async (req, res) => {
   try {
     const deleted = await Users.findByIdAndDelete(req.params.id);
     if (!deleted) return httpResponses.notFound(res, 'User not found');
+
+    const userFolderPath = path.join(__dirname, '..', '..', 'users', req.params.id);
+    try {
+      await fs.rm(userFolderPath, { recursive: true, force: true });
+    } catch (fsErr) {
+      console.error(`Error deleting folder for user ${req.params.id}:`, fsErr);
+    }
+
     return httpResponses.ok(res, { message: 'User deleted successfully' });
   } catch (err) {
     return httpResponses.internalError(res, 'Error deleting user');
   }
 });
 
+
 // DELETE /dev/wipe borrar todos usuarios
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const resultado = await Users.deleteMany({});
-    return httpResponses.ok(res, { deletedCount: resultado.deletedCount });
+
+    const uploadsPath = path.join(__dirname, '..', '..', 'assets', 'users');
+    try {
+      const folders = await fs.readdir(uploadsPath, { withFileTypes: true });
+      const folderDeletions = folders
+        .filter(dirent => dirent.isDirectory())
+        .map(dirent => fs.rm(path.join(uploadsPath, dirent.name), { recursive: true, force: true }));
+      await Promise.all(folderDeletions);
+    } catch (fsErr) {
+      console.error('Error deleting user folders:', fsErr);
+    }
+
+    return httpResponses.ok(res, { deletedCount: uploadsPath });
   } catch (err) {
     return httpResponses.internalError(res, 'Error wiping users');
   }
 });
+
 
 module.exports = router;
