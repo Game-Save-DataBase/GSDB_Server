@@ -32,7 +32,7 @@ router.get('/', async (req, res) => {
     const comments_response = await Comments.find(filter);
 
     if (comments_response.length === 0) {
-      return httpResponses.ok(res, []);
+      return httpResponses.noContent(res, 'No coincidences');
     }
 
     return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
@@ -68,6 +68,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const comments_response = await Comments.find(mongoFilter);
+    if (comments_response.length === 0) return httpResponses.noContent(res, 'No coincidences');
 
     return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
   } catch (error) {

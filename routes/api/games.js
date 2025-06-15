@@ -34,7 +34,7 @@ router.get('/', async (req, res) => {
 
     // Si no hay resultados, devuelvo array vacío, no 404
     if (games_response.length === 0) {
-      return httpResponses.ok(res, []);
+      return httpResponses.noContent(res, 'No coincidences');
     }
 
     return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
@@ -84,6 +84,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const games_response = await Games.find(mongoFilter);
+    if(games_response ===0) return httpResponses.noContent(res, 'No coincidences');
 
     return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
   } catch (error) {

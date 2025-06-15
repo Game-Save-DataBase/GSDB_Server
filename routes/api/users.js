@@ -30,7 +30,7 @@ router.get('/', async (req, res) => {
 
     // NO devolver 404 si no hay coincidencias, devolver array vacío 200
     if (u_response.length === 0) {
-      return httpResponses.ok(res, []);
+      return httpResponses.noContent(res, 'No coincidences');
     }
 
     // Si es un solo resultado devolver objeto, sino array
@@ -62,7 +62,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const users = await Users.find(mongoFilter);
-    // No 404, devuelve [] o resultado(s)
+    if(users.lenght === 0) return httpResponses.noContent(res, 'No coincidences');
     return httpResponses.ok(res, users.length === 1 ? users[0] : users);
   } catch (error) {
     return httpResponses.internalError(res, 'Error fetching users');
