@@ -20,9 +20,29 @@ router.get('/', async (req, res) => {
       if (!savedata) return httpResponses.notFound(res, `Savedata with id ${query._id} not found`);
       return httpResponses.ok(res, savedata);
     }
+        // Parsear y validar limit/offset
+    const limit = Math.min(parseInt(query.limit) || 0, 100);
+    const offset = parseInt(query.offset) || 0;
+
+        // Eliminar del query para que no interfiera en buildMongoFilter
+    delete query.limit;
+    delete query.offset;
 
     const filter = buildMongoFilter(query, filterFields);
-    const savedatas = await SaveDatas.find(filter);
+    if (query.text) {
+      const searchText = String(query.text);
+      const regex = new RegExp(searchText, 'i');
+
+      filter.$or = [
+        { title: { $regex: regex } },
+        { description: { $regex: regex } }
+      ];
+    }
+
+    let savesQuery = SaveDatas.find(filter).skip(offset);
+    if (limit > 0) savesQuery = savesQuery.limit(limit);
+
+    const savedatas = await savesQuery;
 
     if (savedatas.length === 0) return httpResponses.noContent(res, 'No coincidences');
     if (savedatas.length === 1) return httpResponses.ok(res, savedatas[0]);

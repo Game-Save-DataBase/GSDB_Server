@@ -18,7 +18,7 @@ function buildMongoFilter(query, modelFields) {
     const mongoOpMap = { gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte', eq: '$eq', ne: '$ne', like: '$regex' };
 
     const allowedKeys = Object.keys(modelFields);
-    const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k) && k !== '_id');
+    const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k) && k !== '_id' && k !== 'text');
 
     if (invalidKeys.length > 0) {
         const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);

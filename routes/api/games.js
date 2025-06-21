@@ -28,9 +28,20 @@ router.get('/', async (req, res) => {
       if (!game) return httpResponses.notFound(res, `Game with id ${query._id} not found`);
       return httpResponses.ok(res, game);
     }
+        // Parsear y validar limit/offset
+    const limit = Math.min(parseInt(query.limit) || 0, 100);
+    const offset = parseInt(query.offset) || 0;
+
+        // Eliminar del query para que no interfiera en buildMongoFilter
+    delete query.limit;
+    delete query.offset;
 
     const filter = buildMongoFilter(query, filterFields);
-    const games_response = await Games.find(filter);
+
+    let gamesQuery = Games.find(filter).skip(offset);
+    if (limit > 0) gamesQuery = gamesQuery.limit(limit);
+
+    const games_response = await gamesQuery;
 
     // Si no hay resultados, devuelvo array vacío, no 404
     if (games_response.length === 0) {
