@@ -161,6 +161,52 @@ router.post('/unfollow', authenticateMW, async (req, res) => {
   }
 });
 
+// POST /favorite-game
+router.post('/favorite-game', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const { gameID } = req.body;
+
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+    if (!gameID) return httpResponses.badRequest(res, 'Missing gameID');
+
+    const alreadyFavorite = loggedUser.favGames.includes(gameID);
+    if (alreadyFavorite) {
+      return httpResponses.ok(res, { message: 'Game already in favorites' });
+    }
+
+    loggedUser.favGames.push(gameID);
+    await loggedUser.save();
+
+    return httpResponses.ok(res, { message: 'Game added to favorites' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error adding favorite game');
+  }
+});
+
+router.post('/unfavorite-game', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    const { gameID } = req.body;
+
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+    if (!gameID) return httpResponses.badRequest(res, 'Missing gameID');
+
+    const index = loggedUser.favGames.indexOf(gameID);
+    if (index === -1) {
+      return httpResponses.ok(res, { message: 'Game not in favorites' });
+    }
+
+    loggedUser.favGames.splice(index, 1); // elimina el gameId
+    await loggedUser.save();
+
+    return httpResponses.ok(res, { message: 'Game removed from favorites' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error removing favorite game');
+  }
+});
+
+
 // POST /:userId/upload/:type
 router.post('/:userId/upload/:type', authenticateMW, uploadUserImage.single('image'), async (req, res) => {
   const { userId, type } = req.params;
