@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/mongoutils');
+const { buildMongoFilter } = require('../../utils/queryUtils');
 const { Comments, filterFields } = require('../../models/Comments');
 const httpResponses = require('../../utils/httpResponses');
 
