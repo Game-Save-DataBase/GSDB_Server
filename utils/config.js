@@ -8,8 +8,9 @@ const config = {
     secretKey: process.env.SECRET_KEY,
     isDevMode: process.env.DEV_MODE === 'true',
     apiVersion: process.env.API_VERSION,
-    connection: process.env.GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
+    connection: process.env.DIR_GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
     allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co'],
+    refreshInterval: process.env.REFRESH_INTERVAL,
     //directorios utiles
     paths: {
         //no funcionara a no ser que venga precedido de connection (si se usa fuera de este proyecto)
@@ -25,6 +26,7 @@ const config = {
         api: process.env.API,
         //no funcionara a no ser de que venga precedido de connection
         games: process.env.API+process.env.API_GAMES,//localhost:PORT/api/games
+        platforms: process.env.API+process.env.API_PLATFORMS,//localhost:PORT/api/platforms
         savedatas: process.env.API+process.env.API_SAVEDATAS,//localhost:PORT/api/savedatas
         comments: process.env.API+process.env.API_COMMENTS,//localhost:PORT/api/comments
         users: process.env.API+process.env.API_USERS,//localhost:PORT/api/users

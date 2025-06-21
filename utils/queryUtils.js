@@ -103,4 +103,18 @@ function castValueByType(value, type) {
     }
 }
 
-module.exports = { buildMongoFilter };
+
+function buildIGDBQueryFromRequest(query) {
+  const filters = [];
+
+  if (query.name) {
+    filters.push(`search "${query.name}";`);
+  }
+
+  // Puedes agregar más campos si lo necesitas
+  const fields = ['name', 'summary', 'rating', 'platforms', 'cover'];
+
+  return `fields ${fields.join(',')}; ${filters.join(' ')} limit 10;`;
+}
+
+module.exports = { buildMongoFilter, buildIGDBQueryFromRequest };

@@ -9,11 +9,12 @@ const bodyParser = require("body-parser");
 const path = require('path'); 
 const passport = require('./config/passport');
 const routesGames = require("./routes/api/games");
+const routesPlatforms = require("./routes/api/platforms");
 const routesSaveDatas = require("./routes/api/savedatas");
 const routesComments = require("./routes/api/comments");
 const routesUsers = require("./routes/api/users");
 const routesAuth= require("./routes/api/auth");
-
+const { refreshIGDB } = require('./scripts/refreshIGDB');
 
 const app = express();
 
@@ -59,6 +60,7 @@ app.use(passport.session());
 // for the /api/books path
 //esto es un include para que las aplicaciones que usen nuestra BBDD puedan acceder a ella por bloqueos de seguridad
 app.use(config.api.games, routesGames);
+app.use(config.api.platforms, routesPlatforms);
 app.use(config.api.savedatas, routesSaveDatas);
 app.use(config.api.comments, routesComments);
 app.use(config.api.users, routesUsers);
@@ -87,11 +89,37 @@ app.all(config.api.api+'/*', async (req, res) => {
 
 })
 
-// Connect Database
-connectDB();
 
-app.get('/', (req, res) => res.send('Hello world!'));
+connectDB()
+  .then(() => {
+    console.log('Database connected');
 
-const port = process.env.PORT;
+    const port = process.env.PORT || 8082;
 
-app.listen(port, () => console.log(`Server running on port ${port}`));
+    // Primero arranca el servidor
+    app.listen(port, async () => {
+      console.log(`Server running on port ${port}`);
+
+      // Después llama a refreshIGDB
+      try {
+        await refreshIGDB();
+        console.log('Datos iniciales refrescados correctamente');
+      } catch (err) {
+        console.error('Error refrescando datos iniciales:', err);
+      }
+
+       // Programa que se ejecute refreshIGDB cada X minutos
+      setInterval(async () => {
+        try {
+          await refreshIGDB();
+          console.log('Datos refrescados automáticamente');
+        } catch (err) {
+          console.error('Error refrescando datos automáticamente:', err);
+        }
+      }, config.refreshInterval); // minutos a milisegundos
+    });
+  })
+  .catch(err => {
+    console.error('Error conectando a la base de datos:', err);
+    process.exit(1);
+  });
