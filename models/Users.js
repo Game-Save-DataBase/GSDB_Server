@@ -33,7 +33,21 @@ const UserSchema = new mongoose.Schema({
                 rating: { type: String }
             }
         ], default: []
-    }
+    },
+    notifications: { //notificaciones
+        type: [
+            {
+                _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
+                type: {type: Number},
+                title: {type: String},
+                body: {type: String},
+                read: {type: Boolean, default: false},
+                createdAt: {type: Date},
+                link: {type: String}
+            }
+        ]
+
+    } 
 });
 
 /**

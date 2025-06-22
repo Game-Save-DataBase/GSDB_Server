@@ -9,6 +9,7 @@ const { Users, filterFields } = require('../../models/Users');
 const httpResponses = require('../../utils/httpResponses');
 const fs = require('fs/promises');
 const path = require('path');
+const mongoose = require('mongoose');
 
 
 // Ruta de test, dev mode
@@ -297,6 +298,101 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
     return httpResponses.ok(res, { deletedCount: uploadsPath });
   } catch (err) {
     return httpResponses.internalError(res, 'Error wiping users');
+  }
+});
+
+
+// POST /add-notification
+router.post('/add-notification', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    const { type, title, body, link } = req.body;
+
+    if (typeof type !== 'number' || !title || !body) {
+      return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), title, body required');
+    }
+    console.log('BODY:', req.body);
+    console.log('USER:', loggedUser);
+    const notification = {
+      _id: new mongoose.Types.ObjectId(),
+      type,
+      title,
+      body,
+      read: false,
+      createdAt: new Date(), 
+      link: link || null
+    };
+
+    loggedUser.notifications.push(notification);
+    await loggedUser.save();
+
+    return httpResponses.ok(res, { message: 'Notification added', notification });
+  } catch (err) {
+    console.error('Error in /add-notification:', err);
+    return httpResponses.internalError(res, 'Error adding notification');
+  }
+});
+
+
+// DELETE /remove-notification/:notificationId
+router.delete('/remove-notification/:notificationId', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    const { notificationId } = req.params;
+
+    if (!notificationId) {
+      return httpResponses.badRequest(res, 'Notification ID required');
+    }
+
+    const beforeCount = loggedUser.notifications.length;
+    loggedUser.notifications = loggedUser.notifications.filter(n => n._id.toString() !== notificationId);
+
+    if (loggedUser.notifications.length === beforeCount) {
+      return httpResponses.notFound(res, 'Notification not found');
+    }
+
+    await loggedUser.save();
+    return httpResponses.ok(res, { message: 'Notification removed' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error removing notification');
+  }
+});
+
+// GET /notifications
+router.get('/notifications', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    return httpResponses.ok(res, loggedUser.notifications || []);
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error retrieving notifications');
+  }
+});
+
+// PATCH /notification/:notificationId/read
+router.patch('/notification/:notificationId/read', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    const { notificationId } = req.params;
+
+    const notification = loggedUser.notifications.find(n => n._id.toString() === notificationId);
+    if (!notification) {
+      return httpResponses.notFound(res, 'Notification not found');
+    }
+
+    notification.read = true;
+    await loggedUser.save();
+
+    return httpResponses.ok(res, { message: 'Notification marked as read' });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error marking notification as read');
   }
 });
 
