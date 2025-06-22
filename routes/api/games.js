@@ -5,6 +5,9 @@ const blockIfNotDev = require('../../middleware/devModeMW');
 const { buildMongoFilter } = require('../../utils/queryUtils');
 const { Games, filterFields } = require('../../models/games');
 const httpResponses = require('../../utils/httpResponses');
+const {callIGDB} = require('../../services/igdbServices')
+const config = require('../../utils/config');
+
 
 /**
  * @route GET api/games/test
@@ -105,15 +108,59 @@ router.post('/by-id', async (req, res) => {
 
 /**
  * @route POST api/games
- * @desc add/save game
- * @access public (authenticated)
+ * @desc Añadir un juego a la base de datos usando un ID de IGDB
+ * @access Authenticated
  */
 router.post('/', authenticateMW, async (req, res) => {
+  const { IGDB_ID } = req.body;
+
+  if (!IGDB_ID || typeof IGDB_ID !== 'number') {
+    return httpResponses.badRequest(res, 'IGDB_ID is required and must be a number');
+  }
+
   try {
-    const game = await Games.create(req.body);
-    return httpResponses.created(res, 'Game added successfully', game);
+    const existing = await Games.findOne({ IGDB_ID });
+    if (existing) {
+      return httpResponses.conflict(res, 'Game already exists in GSDB');
+    }
+
+    // game data
+    const gameQuery = `fields name, cover, platforms, slug; where id = ${IGDB_ID};`;
+    const [gameFromIGDB] = await callIGDB('games', gameQuery);
+
+    if (!gameFromIGDB) {
+      return httpResponses.notFound(res, `Game with ID ${IGDB_ID} does not exist in IGDB`);
+    }
+
+    const { name, platforms = [], cover: coverId, slug } = gameFromIGDB;
+
+    //2. sacamos la url de la imagen
+    let coverURL = config.paths.gameCover_default;
+    if (coverId) {
+      const coverQuery = `fields image_id; where id = ${coverId};`;
+      const [coverData] = await callIGDB('covers', coverQuery);
+
+      if (coverData?.image_id) {
+        coverURL = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${coverData.image_id}.jpg`;
+      }
+    }
+
+    // 3: creating game
+    const newGame = {
+      title: name,
+      platformsID: platforms.map(id => id.toString()),
+      savesID: [],
+      cover: coverURL,
+      IGDB_ID,
+      slug,
+    };
+
+    const createdGame = await Games.create(newGame);
+    return httpResponses.created(res, `Game ${newGame.title} with IGDB ID ${newGame.IGDB_ID} added successfully.`, createdGame);
+
   } catch (err) {
-    return httpResponses.badRequest(res, 'Unable to add this game', err.message);
+    console.error('[ERROR] Could not add game from IGDB:', err);
+    return httpResponses.serverError(res, 'Error adding game', err.message || err);
   }
 });
 

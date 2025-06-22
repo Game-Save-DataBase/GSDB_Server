@@ -26,7 +26,7 @@ async function getAccessToken() {
   // convertimos de seg a ms
   expiresAt = now + response.data.expires_in * 1000 - 60 * 1000; // Le restamos 1 minuto por seguridad
 
-  console.log('[IGDB] Nuevo token obtenido, expira en', new Date(expiresAt).toLocaleString());
+  console.log(`[IGDB] Nuevo token obtenido: ${accessToken}, expira en`, new Date(expiresAt).toLocaleString());
 
   return accessToken;
 }

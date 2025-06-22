@@ -12,14 +12,18 @@ const mongoose = require('mongoose');
 
 const GameSchema = new mongoose.Schema({
     title: { type: String, required: true },             //titulo del juego
-    platformsID: { type: [String], required: true },    //ID de todas las plataformas en las que existen saves para este juego
+    slug: {type: String, required: true, unique: true},
+    platformsID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
     savesID: { type: [String], default: [] },       //todos los ID de los saves subidos para este juego
-    cover: { type: String, default: config.paths.gameCover_default } //ruta de la imagen caratula  
+    cover: { type: String, default: config.paths.gameCover_default }, //ruta de la imagen caratula  
+    IGDB_ID: {type: Number, required: true}
 });
 
 const filterFields = {
     title: 'string',
-    platformsID: 'string' //aunque se guarden en un array, permitimos hacer un filtro rapido con una plataforma
+    platformsID: 'string', //aunque se guarden en un array, permitimos hacer un filtro rapido con una plataforma
+    IGDB_ID: 'number',
+    slug: 'string'
 };
 
 

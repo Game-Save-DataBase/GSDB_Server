@@ -16,8 +16,8 @@ const PlatformSchema = new mongoose.Schema({
     slug: { type: String, required: true },       //A url-safe, unique, lower-case version of the name
     logo: { type: String, required:true }, //url del logo extraido de la base de datos de logos de igdb
     family: { type: String, required:true }, //familia extraida de la base de datos de familia (name)
-    url: { type: String, required:true } //url de igdb
-
+    url: { type: String, required:true }, //url de igdb
+    IGDB_ID: {type: Number, required:true}//id de igdb
 });
 
 const filterFields = {
@@ -26,7 +26,8 @@ const filterFields = {
     name: 'string', 
     family:'string',
     slug: 'string',      
-    family: 'string'
+    family: 'string',
+    IGDB_ID: 'number'
 };
 
 

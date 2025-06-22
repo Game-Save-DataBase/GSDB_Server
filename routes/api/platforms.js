@@ -22,8 +22,9 @@ async function syncPlatformsFromIGDB() {
 
     // 3) Consultar plataformas con abbreviation válida
     const platformsQuery = `
-      fields abbreviation, generation, name, slug, platform_logo, platform_family, url;
+      fields id, abbreviation, generation, name, slug, platform_logo, platform_family, url;
       where abbreviation != null & abbreviation != "";
+      sort name asc;
       limit 500;
     `;
     const igdbPlatforms = await callIGDB('platforms', platformsQuery);
@@ -37,6 +38,7 @@ async function syncPlatformsFromIGDB() {
       updateOne: {
         filter: { abbreviation: p.abbreviation },
         update: {
+          IGDB_ID: p.id,
           abbreviation: p.abbreviation,
           generation: p.generation,
           name: p.name,
@@ -131,7 +133,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const query = req.query;
-    let mongoFilter = { _id: { $in: ids } };
+    let mongoFilter = { IGDB_ID: { $in: ids } };
 
     if (Object.keys(query).length > 0) {
       const additionalFilter = buildMongoFilter(query, filterFields);
