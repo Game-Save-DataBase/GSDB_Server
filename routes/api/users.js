@@ -303,6 +303,7 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
 
 
 // POST /add-notification
+// Añade notificaciones en el usuario logado
 router.post('/add-notification', authenticateMW, async (req, res) => {
   try {
     const loggedUser = req.user;
@@ -313,8 +314,6 @@ router.post('/add-notification', authenticateMW, async (req, res) => {
     if (typeof type !== 'number' || !title || !body) {
       return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), title, body required');
     }
-    console.log('BODY:', req.body);
-    console.log('USER:', loggedUser);
     const notification = {
       _id: new mongoose.Types.ObjectId(),
       type,
@@ -335,8 +334,46 @@ router.post('/add-notification', authenticateMW, async (req, res) => {
   }
 });
 
+// POST /send-notification
+// Envía una notifiación al usuario indicado
+router.post('/send-notification', authenticateMW, async (req, res) => {
+  try {
+    const loggedUser = req.user;
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    const { toUserId, type, title, body, link } = req.body;
+
+    if (!toUserId || typeof type !== 'number' || !title || !body) {
+      return httpResponses.badRequest(res, 'Missing or invalid fields');
+    }
+    console.log("userID:", toUserId);
+    const toUser = await Users.findById(toUserId);
+    if (!toUser) return httpResponses.notFound(res, 'User not found');
+    console.log("touser:", toUser);
+
+    const notification = {
+      _id: new mongoose.Types.ObjectId(),
+      type,
+      title,
+      body,
+      read: false,
+      createdAt: new Date(),
+      link: link || null
+    };
+
+    toUser.notifications.push(notification);
+    await toUser.save();
+
+    return httpResponses.ok(res, { message: 'Notification sent', notification });
+  } catch (err) {
+    console.error('Error in /send-notification:', err);
+    return httpResponses.internalError(res, 'Error sending notification');
+  }
+});
+
 
 // DELETE /remove-notification/:notificationId
+// Borrar una notificacion por id
 router.delete('/remove-notification/:notificationId', authenticateMW, async (req, res) => {
   try {
     const loggedUser = req.user;
@@ -363,6 +400,7 @@ router.delete('/remove-notification/:notificationId', authenticateMW, async (req
 });
 
 // GET /notifications
+// Devuelve todas las notificaciones del usuario logado
 router.get('/notifications', authenticateMW, async (req, res) => {
   try {
     const loggedUser = req.user;
@@ -375,6 +413,7 @@ router.get('/notifications', authenticateMW, async (req, res) => {
 });
 
 // PATCH /notification/:notificationId/read
+// Cambia el parametro read a true en una notificacion por id del usuario logado
 router.patch('/notification/:notificationId/read', authenticateMW, async (req, res) => {
   try {
     const loggedUser = req.user;
