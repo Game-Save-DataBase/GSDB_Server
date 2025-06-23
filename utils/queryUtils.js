@@ -72,58 +72,64 @@ function buildMongoFilter(query, modelFields) {
     }
 
     return filter;
-}
+} 
 
-function buildIGDBFilter(query, modelFields, mapFiltersFn) {
-    // 1. construir el filtro con la sintaxis de mongodb
-    const mongoFilter = buildMongoFilter(query, modelFields);
-    if (!mongoFilter) return '';
+function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
+    if (!rawQuery || Object.keys(rawQuery).length === 0) return '';
 
-    // 2. se mapean los campos
-    const igdbFilter = mapFiltersFn(mongoFilter);
-
-    // 3. Mapeo de operadores para IGDB
-    const igdbOpMap = { '$gt': '>', '$gte': '>=', '$lt': '<', '$lte': '<=', '$eq': '=', '$ne': '!=', '$regex': '~' };
+    const igdbOpMap = {
+        gt: '>',
+        gte: '>=',
+        lt: '<',
+        lte: '<=',
+        eq: '=',
+        ne: '!=',
+        like: '~',   // "*val*"
+        start: '~',  // "val*"
+        end: '~'     // "*val"
+    };
 
     const conditions = [];
 
-    // 4. Recorremos igdbFilter para construir string WHERE IGDB
-    for (const [field, value] of Object.entries(igdbFilter)) {
+    for (const [localField, type] of Object.entries(modelFields)) {
+        const value = rawQuery[localField];
+        if (value === undefined) continue;
+
+        // Mapear el campo local a IGDB
+        const igdbField = mapFiltersFn({ [localField]: 1 }) ? Object.keys(mapFiltersFn({ [localField]: 1 }))[0] : localField;
+
         if (typeof value === 'object' && !Array.isArray(value)) {
-            // Cuando value es un objeto con operadores
-            for (const [op, val] of Object.entries(value)) {
-                const igdbOp = igdbOpMap[op] || op; // mapeamos operador mongo a IGDB
+            for (const [op, valRaw] of Object.entries(value)) {
+                const opSymbol = igdbOpMap[op];
+                if (!opSymbol) continue;
 
-                if (igdbOp === '~') {
-                    if (field != "name") {
-                        const valStr = String(val).replace(/["\\]/g, ''); // Sanitiza comillas
-                        conditions.push(`${field} ${igdbOp} "*${valStr}*"`);
-                    }
+                // Ignorar like sobre title (se usa search)
+                if (op === 'like' && localField === 'title') continue;
 
-                }
-                else if (typeof val === 'string') {
-                    conditions.push(`${field} ${igdbOp} "${val}"`);
-                } else if (typeof val === 'boolean' || typeof val === 'number') {
-                    conditions.push(`${field} ${igdbOp} ${val}`);
+                const val = String(valRaw).replace(/["\\]/g, '');
+
+                if (op === 'like') {
+                    conditions.push(`${igdbField} ${opSymbol} "*${val}*"`);
+                } else if (op === 'start') {
+                    conditions.push(`${igdbField} ${opSymbol} "${val}*"`);
+                } else if (op === 'end') {
+                    conditions.push(`${igdbField} ${opSymbol} "*${val}"`);
+                } else if (typeof valRaw === 'string') {
+                    conditions.push(`${igdbField} ${opSymbol} "${val}"`);
                 } else {
-                    conditions.push(`${field} ${igdbOp} "${val}"`);
+                    conditions.push(`${igdbField} ${opSymbol} ${val}`);
                 }
             }
         } else {
-            // Valor simple: operador eq (=)
-            if (typeof value === 'string') {
-                conditions.push(`${field} = "${value}"`);
-            } else if (typeof value === 'boolean' || typeof value === 'number') {
-                conditions.push(`${field} = ${value}`);
-            } else {
-                conditions.push(`${field} = "${value}"`);
-            }
+            // Valor simple = igualdad
+            const val = String(value).replace(/["\\]/g, '');
+            conditions.push(`${igdbField} = "${val}"`);
         }
     }
 
-    // 5. Unimos condiciones con AND (&)
     return conditions.join(' & ');
 }
+
 
 
 /**

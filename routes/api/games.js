@@ -57,17 +57,17 @@ router.get('/', async (req, res) => {
       }
       const finalWhere = `${baseConditions.join(' & ')}`;
 
-      console.log(whereString)
-      // Armamos la query IGDB completa
-      let igdbQuery = `
-        fields name, cover, platforms, slug, id, url;
-        limit ${limit};
-        offset ${offset};
-        where ${finalWhere};
-      `;
-      if (query.title && typeof query.title === 'object' && query.title.like) {
-        igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
-      }
+        console.log(whereString)
+        // Armamos la query IGDB completa
+        let igdbQuery = `
+          fields name, cover, platforms, slug, id, url;
+          limit ${limit};
+          offset ${offset};
+          where ${finalWhere};
+        `;
+        if (query.title && typeof query.title === 'object' && query.title.like) {
+          igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
+        }
 
       console.log(igdbQuery);
 
