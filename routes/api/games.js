@@ -2,10 +2,11 @@ const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/queryUtils');
-const { Games, filterFields } = require('../../models/games');
+const { buildMongoFilter, buildIGDBFilter } = require('../../utils/queryUtils');
+const { Games, filterFields, mapFiltersToIGDB } = require('../../models/games');
+const { Platforms } = require('../../models/platforms');
 const httpResponses = require('../../utils/httpResponses');
-const {callIGDB} = require('../../services/igdbServices')
+const { callIGDB } = require('../../services/igdbServices')
 const config = require('../../utils/config');
 
 
@@ -24,34 +25,106 @@ router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'game rou
  */
 router.get('/', async (req, res) => {
   try {
-    const query = req.query;
+    const query = { ...req.query };
+    const searchIGDB = query.searchIGDB === 'true';
+    delete query.searchIGDB;
 
     if (query._id) {
       const game = await Games.findById(query._id);
       if (!game) return httpResponses.notFound(res, `Game with id ${query._id} not found`);
       return httpResponses.ok(res, game);
     }
-        // Parsear y validar limit/offset
-    const limit = Math.min(parseInt(query.limit) || 0, 100);
-    const offset = parseInt(query.offset) || 0;
 
-        // Eliminar del query para que no interfiera en buildMongoFilter
+    const limit = Math.min(Math.max(parseInt(query.limit) || 30, 1), 100);
+    const offset = Math.max(parseInt(query.offset) || 0, 0);
     delete query.limit;
     delete query.offset;
 
-    const filter = buildMongoFilter(query, filterFields);
+    if (searchIGDB) {
+      // Construimos el filtro where para IGDB usando la query y el mapeo
 
+      const platformIDs = await Platforms.find().distinct('IGDB_ID');
+
+
+      const whereString = buildIGDBFilter(query, filterFields, mapFiltersToIGDB);
+      const baseConditions = [
+        'version_parent = null',
+        `platforms = (${platformIDs.join(',')})`,
+        'game_type = (11,8,4,0)'
+      ];
+      if (whereString) {
+        baseConditions.push(whereString);
+      }
+      const finalWhere = `${baseConditions.join(' & ')}`;
+
+      console.log(whereString)
+      // Armamos la query IGDB completa
+      let igdbQuery = `
+        fields name, cover, platforms, slug, id, url;
+        limit ${limit};
+        offset ${offset};
+        where ${finalWhere};
+      `;
+      if (query.title && typeof query.title === 'object' && query.title.like) {
+        igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
+      }
+
+      console.log(igdbQuery);
+
+      const igdbResultsRaw = await callIGDB('games', igdbQuery);
+
+      // Enriquecemos con la URL del cover
+      const enrichedGames = await Promise.all(igdbResultsRaw.map(async (game) => {
+        const { name, platforms = [], cover: coverId, slug, id: IGDB_ID, url: IGDB_url } = game;
+
+        let coverURL = config.paths.gameCover_default;
+        if (coverId) {
+          const coverQuery = `fields image_id; where id = ${coverId};`;
+          const [coverData] = await callIGDB('covers', coverQuery);
+          if (coverData?.image_id) {
+            coverURL = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${coverData.image_id}.jpg`;
+          }
+        }
+
+        return {
+          title: name,
+          platformsID: platforms,
+          savesID: [],
+          cover: coverURL,
+          IGDB_ID,
+          IGDB_url,
+          slug,
+          external: true,
+        };
+      }));
+
+      const igdbIDs = enrichedGames.map(g => g.IGDB_ID);
+      const existingGames = await Games.find({ IGDB_ID: { $in: igdbIDs } });
+      const existingMap = new Map(existingGames.map(game => [game.IGDB_ID, game]));
+      const finalResults = enrichedGames
+        .map(game => existingMap.get(game.IGDB_ID) || game)
+        .sort((a, b) => a.title.localeCompare(b.title));
+
+      if (finalResults.length === 0) {
+        return httpResponses.noContent(res, 'No coincidences');
+      }
+
+      return httpResponses.ok(res, finalResults.length === 1 ? finalResults[0] : finalResults);
+    }
+
+    // Filtro local para Mongo
+    const filter = buildMongoFilter(query, filterFields);
     let gamesQuery = Games.find(filter).skip(offset);
     if (limit > 0) gamesQuery = gamesQuery.limit(limit);
 
     const games_response = await gamesQuery;
 
-    // Si no hay resultados, devuelvo array vacío, no 404
     if (games_response.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
 
     return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
+
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
@@ -98,7 +171,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const games_response = await Games.find(mongoFilter);
-    if(games_response ===0) return httpResponses.noContent(res, 'No coincidences');
+    if (games_response === 0) return httpResponses.noContent(res, 'No coincidences');
 
     return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
   } catch (error) {
@@ -125,14 +198,18 @@ router.post('/', authenticateMW, async (req, res) => {
     }
 
     // game data
-    const gameQuery = `fields name, cover, platforms, slug; where id = ${IGDB_ID};`;
+
+    const platformIDs = await Platforms.find().distinct('IGDB_ID');
+
+    const gameQuery = `fields name, cover, platforms, slug, url; where id = ${IGDB_ID} & platforms = (${platformIDs.join(',')});`;
+    console.log(gameQuery);
     const [gameFromIGDB] = await callIGDB('games', gameQuery);
 
     if (!gameFromIGDB) {
-      return httpResponses.notFound(res, `Game with ID ${IGDB_ID} does not exist in IGDB`);
+      return httpResponses.notFound(res, `Game with ID ${IGDB_ID} does not exist in IGDB or does not follow GSDB restrictions.`);
     }
 
-    const { name, platforms = [], cover: coverId, slug } = gameFromIGDB;
+    const { name, platforms = [], cover: coverId, slug, url } = gameFromIGDB;
 
     //2. sacamos la url de la imagen
     let coverURL = config.paths.gameCover_default;
@@ -152,7 +229,9 @@ router.post('/', authenticateMW, async (req, res) => {
       savesID: [],
       cover: coverURL,
       IGDB_ID,
+      IGDB_url: url,
       slug,
+      external: false,
     };
 
     const createdGame = await Games.create(newGame);
@@ -160,7 +239,7 @@ router.post('/', authenticateMW, async (req, res) => {
 
   } catch (err) {
     console.error('[ERROR] Could not add game from IGDB:', err);
-    return httpResponses.serverError(res, 'Error adding game', err.message || err);
+    return httpResponses.internalError(res, 'Error adding game', err.message || err);
   }
 });
 

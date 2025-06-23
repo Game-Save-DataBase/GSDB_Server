@@ -41,13 +41,13 @@ function buildMongoFilter(query, modelFields) {
                         let val = value[op];
                         try {
                             if (mongoOp === '$regex') {
-                                // solo tiene sentido aplicar regex a strings
                                 if (type !== 'string') {
                                     throw new Error(`Operator 'like' only supported on type 'string'`);
                                 }
                                 val = String(val);
-                                filter[field][mongoOp] = new RegExp(val, 'i'); // insensible a mayúsculas
-                            } else {
+                                filter[field][mongoOp] = val;
+                            }
+                            else {
                                 val = castValueByType(val, type);
                                 filter[field][mongoOp] = val;
                             }
@@ -73,6 +73,58 @@ function buildMongoFilter(query, modelFields) {
 
     return filter;
 }
+
+function buildIGDBFilter(query, modelFields, mapFiltersFn) {
+    // 1. construir el filtro con la sintaxis de mongodb
+    const mongoFilter = buildMongoFilter(query, modelFields);
+    if (!mongoFilter) return '';
+
+    // 2. se mapean los campos
+    const igdbFilter = mapFiltersFn(mongoFilter);
+
+    // 3. Mapeo de operadores para IGDB
+    const igdbOpMap = { '$gt': '>', '$gte': '>=', '$lt': '<', '$lte': '<=', '$eq': '=', '$ne': '!=', '$regex': '~' };
+
+    const conditions = [];
+
+    // 4. Recorremos igdbFilter para construir string WHERE IGDB
+    for (const [field, value] of Object.entries(igdbFilter)) {
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            // Cuando value es un objeto con operadores
+            for (const [op, val] of Object.entries(value)) {
+                const igdbOp = igdbOpMap[op] || op; // mapeamos operador mongo a IGDB
+
+                if (igdbOp === '~') {
+                    if (field != "name") {
+                        const valStr = String(val).replace(/["\\]/g, ''); // Sanitiza comillas
+                        conditions.push(`${field} ${igdbOp} "*${valStr}*"`);
+                    }
+
+                }
+                else if (typeof val === 'string') {
+                    conditions.push(`${field} ${igdbOp} "${val}"`);
+                } else if (typeof val === 'boolean' || typeof val === 'number') {
+                    conditions.push(`${field} ${igdbOp} ${val}`);
+                } else {
+                    conditions.push(`${field} ${igdbOp} "${val}"`);
+                }
+            }
+        } else {
+            // Valor simple: operador eq (=)
+            if (typeof value === 'string') {
+                conditions.push(`${field} = "${value}"`);
+            } else if (typeof value === 'boolean' || typeof value === 'number') {
+                conditions.push(`${field} = ${value}`);
+            } else {
+                conditions.push(`${field} = "${value}"`);
+            }
+        }
+    }
+
+    // 5. Unimos condiciones con AND (&)
+    return conditions.join(' & ');
+}
+
 
 /**
  * Convierte un valor en un tipo especificado
@@ -104,17 +156,4 @@ function castValueByType(value, type) {
 }
 
 
-function buildIGDBQueryFromRequest(query) {
-  const filters = [];
-
-  if (query.name) {
-    filters.push(`search "${query.name}";`);
-  }
-
-  // Puedes agregar más campos si lo necesitas
-  const fields = ['name', 'summary', 'rating', 'platforms', 'cover'];
-
-  return `fields ${fields.join(',')}; ${filters.join(' ')} limit 10;`;
-}
-
-module.exports = { buildMongoFilter, buildIGDBQueryFromRequest };
+module.exports = { buildMongoFilter, buildIGDBFilter };

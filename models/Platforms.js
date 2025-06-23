@@ -31,5 +31,5 @@ const filterFields = {
 };
 
 
-const Platforms = mongoose.model('platforms', PlatformSchema);
+const Platforms = mongoose.models.Platforms || mongoose.model('Platforms', PlatformSchema);
 module.exports = {Platforms,filterFields}
