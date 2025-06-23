@@ -63,7 +63,7 @@ router.post('/by-id', async (req, res) => {
     }
 
     const users = await Users.find(mongoFilter);
-    if(users.lenght === 0) return httpResponses.noContent(res, 'No coincidences');
+    if (users.lenght === 0) return httpResponses.noContent(res, 'No coincidences');
     return httpResponses.ok(res, users.length === 1 ? users[0] : users);
   } catch (error) {
     return httpResponses.internalError(res, 'Error fetching users');
@@ -314,13 +314,27 @@ router.post('/add-notification', authenticateMW, async (req, res) => {
     if (typeof type !== 'number' || !title || !body) {
       return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), title, body required');
     }
+
+    // Comprobación de duplicados
+    const alreadyExists = loggedUser.notifications.some((n) =>
+      n.type === type &&
+      n.title === title &&
+      n.body === body &&
+      (link ? n.link === link : true)
+    );
+
+    if (alreadyExists) {
+      return httpResponses.conflict(res, 'Duplicate notification already exists');
+    }
+
+
     const notification = {
       _id: new mongoose.Types.ObjectId(),
       type,
       title,
       body,
       read: false,
-      createdAt: new Date(), 
+      createdAt: new Date(),
       link: link || null
     };
 

@@ -114,5 +114,5 @@ UserSchema.pre('save', async function (next) {
 
 });
 
-const Users = mongoose.model('Users', UserSchema);
+const Users = mongoose.models.Users || mongoose.model('Users', UserSchema);
 module.exports = { Users, filterFields };

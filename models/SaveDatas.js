@@ -35,6 +35,6 @@ const filterFields = {
     rating: 'number'
 };
 
-const SaveDatas = mongoose.model('savedatas', SavesSchema);
+const SaveDatas =  mongoose.models.SaveDatas || mongoose.model('savedatas', SavesSchema);
 
 module.exports = { SaveDatas, filterFields };

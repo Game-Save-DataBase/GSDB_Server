@@ -31,6 +31,6 @@ const filterFields ={
     reported:'boolean'
 }
 
-const Comments = mongoose.model('comments', CommentSchema);
+const Comments = mongoose.models.Comments || mongoose.model('comments', CommentSchema);
 
 module.exports = {Comments, filterFields}
