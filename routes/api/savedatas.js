@@ -146,14 +146,14 @@ router.get('/:id/download', authenticateMW, async (req, res) => {
     if (!saveData || !saveData.file) return httpResponses.notFound(res, 'Savedata not found');
 
     const filePath = path.join(__dirname, '../../assets/uploads', saveData._id.toString(), path.basename(saveData.file));
+    
     if (!fs.existsSync(filePath)) return httpResponses.notFound(res, 'File not found');
 
     saveData.nDownloads = (saveData.nDownloads || 0) + 1;
     await saveData.save();
 
-    res.download(filePath, path.basename(saveData.file));
-    return httpResponses.ok(res, { message: 'Downloaded correctly' });
-
+    return res.download(filePath, path.basename(saveData.file));
+    
   } catch (err) {
     console.error("Error while downloading:", err);
     return httpResponses.internalError(res, 'Error processing download');
