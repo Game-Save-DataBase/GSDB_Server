@@ -16,7 +16,8 @@ const GameSchema = new mongoose.Schema({
     platformsID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
     savesID: { type: [String], default: [] },       //todos los ID de los saves subidos para este juego
     cover: { type: String, default: config.paths.gameCover_default }, //ruta de la imagen caratula  
-    IGDB_ID: {type: Number, required: true}
+    IGDB_ID: {type: Number, required: true},
+    userFav: { type: [String], default: [] }    //usuarios que marcaron el juego como favorito
 });
 
 const filterFields = {

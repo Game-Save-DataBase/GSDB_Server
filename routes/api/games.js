@@ -212,4 +212,65 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   }
 });
 
+/**
+ * @route POST api/games/:gameId/favorites
+ * @desc Añade al usuario autenticado a la lista de favoritos de un juego
+ * @access Authenticated
+ */
+router.post('/:id/favorites', authenticateMW, async (req, res) => {
+  try {
+    const gameId = req.params.id;
+    const loggedUser = req.user;
+
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+    
+    const game = await Games.findById(gameId);
+    if (!game) return httpResponses.notFound(res, 'Game not found');
+
+    if (!game.userFav.includes(loggedUser._id)) {
+      game.userFav.push(loggedUser._id);
+      await game.save();
+    }
+
+    return httpResponses.ok(res, {
+      message: `User added to favorites list`
+    });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error adding user', err.message);
+  }
+});
+
+/**
+ * @route DELETE api/games/:gameId/favorites
+ * @desc Elimina al usuario autenticado de los favoritos del juego
+ * @access Authenticated
+ */
+router.delete('/:id/favorites', authenticateMW, async (req, res) => {
+  try {
+    const gameId = req.params.id;
+    const loggedUser = req.user;
+
+    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
+
+    const game = await Games.findById(gameId);
+    if (!game) return httpResponses.notFound(res, 'Game not found');
+
+    const initialCount = game.userFav.length;
+    game.userFav = game.userFav.filter(id => id.toString() !== loggedUser._id);
+
+    if (game.userFav.length === initialCount) {
+      return httpResponses.notFound(res, 'User was not in favorites');
+    }
+
+    await game.save();
+    return httpResponses.ok(res, {
+      message: `User removed from favorites list`,
+    });
+  } catch (err) {
+    return httpResponses.internalError(res, 'Error removing from favorites', err.message);
+  }
+});
+
+
+
 module.exports = router;

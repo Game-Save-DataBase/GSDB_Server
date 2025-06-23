@@ -278,7 +278,6 @@ router.delete('/:id', blockIfNotDev, async (req, res) => {
   }
 });
 
-
 // DELETE /dev/wipe borrar todos usuarios
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
@@ -300,7 +299,6 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
     return httpResponses.internalError(res, 'Error wiping users');
   }
 });
-
 
 // POST /add-notification
 // Añade notificaciones en el usuario logado
@@ -346,10 +344,8 @@ router.post('/send-notification', authenticateMW, async (req, res) => {
     if (!toUserId || typeof type !== 'number' || !title || !body) {
       return httpResponses.badRequest(res, 'Missing or invalid fields');
     }
-    console.log("userID:", toUserId);
     const toUser = await Users.findById(toUserId);
     if (!toUser) return httpResponses.notFound(res, 'User not found');
-    console.log("touser:", toUser);
 
     const notification = {
       _id: new mongoose.Types.ObjectId(),
@@ -370,7 +366,6 @@ router.post('/send-notification', authenticateMW, async (req, res) => {
     return httpResponses.internalError(res, 'Error sending notification');
   }
 });
-
 
 // DELETE /remove-notification/:notificationId
 // Borrar una notificacion por id
