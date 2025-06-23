@@ -57,17 +57,17 @@ router.get('/', async (req, res) => {
       }
       const finalWhere = `${baseConditions.join(' & ')}`;
 
-        console.log(whereString)
-        // Armamos la query IGDB completa
-        let igdbQuery = `
+      console.log(whereString)
+      // Armamos la query IGDB completa
+      let igdbQuery = `
           fields name, cover, platforms, slug, id, url;
           limit ${limit};
           offset ${offset};
           where ${finalWhere};
         `;
-        if (query.title && typeof query.title === 'object' && query.title.like) {
-          igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
-        }
+      if (query.title && typeof query.title === 'object' && query.title.like) {
+        igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
+      }
 
       console.log(igdbQuery);
 
@@ -104,7 +104,7 @@ router.get('/', async (req, res) => {
       const finalResults = enrichedGames
         .map(game => existingMap.get(game.IGDB_ID) || game)
         .sort((a, b) => a.title.localeCompare(b.title));
-
+      console.log(finalResults)
       if (finalResults.length === 0) {
         return httpResponses.noContent(res, 'No coincidences');
       }
@@ -114,7 +114,7 @@ router.get('/', async (req, res) => {
 
     // Filtro local para Mongo
     const filter = buildMongoFilter(query, filterFields);
-    let gamesQuery = Games.find(filter).skip(offset);
+    let gamesQuery = Games.find(filter).sort({ title: 1 }).skip(offset);
     if (limit > 0) gamesQuery = gamesQuery.limit(limit);
 
     const games_response = await gamesQuery;
@@ -202,7 +202,7 @@ router.post('/', authenticateMW, async (req, res) => {
     const platformIDs = await Platforms.find().distinct('IGDB_ID');
 
     const gameQuery = `fields name, cover, platforms, slug, url; where id = ${IGDB_ID} & platforms = (${platformIDs.join(',')});`;
-    console.log(gameQuery);
+    // console.log(gameQuery);
     const [gameFromIGDB] = await callIGDB('games', gameQuery);
 
     if (!gameFromIGDB) {
@@ -260,6 +260,114 @@ router.put('/:id', blockIfNotDev, authenticateMW, async (req, res) => {
   }
 });
 
+
+/**
+ * @route POST api/games/batch
+ * @desc Añadir juegos a la base de datos usando un rango de IDs de IGDB
+ * @access Dev only
+ */
+router.post('/batch', blockIfNotDev, async (req, res) => {
+  const { IGDB_ID_INIT, IGDB_ID_END } = req.body;
+
+  if (!IGDB_ID_INIT || typeof IGDB_ID_INIT !== 'number') {
+    return httpResponses.badRequest(res, 'IGDB_ID_INIT is required and must be a number');
+  }
+
+  if (!IGDB_ID_END || typeof IGDB_ID_END !== 'number') {
+    return httpResponses.badRequest(res, 'IGDB_ID_END is required and must be a number');
+  }
+
+  try {
+    const platformIDs = await Platforms.find().distinct('IGDB_ID');
+
+    // 1. Obtener los juegos ya existentes en ese rango
+    const existingIDs = await Games.find({
+      IGDB_ID: { $gte: IGDB_ID_INIT, $lte: IGDB_ID_END },
+    }).distinct('IGDB_ID');
+
+    // 2. Filtrar los IDs que no están en la base de datos
+    const everyID = [];
+    for (let id = IGDB_ID_INIT; id <= IGDB_ID_END; id++) {
+      if (!existingIDs.includes(id)) {
+        everyID.push(id);
+      }
+    }
+
+    if (everyID.length === 0) {
+      return httpResponses.notFound(res, 'No new games to fetch; all IDs already exist in the database.');
+    }
+
+    // 3. Obtener juegos desde IGDB (una sola llamada con limit)
+    const gameQuery = `
+      fields id, name, cover, platforms, slug, url;
+      where id = (${everyID.join(',')}) & platforms = (${platformIDs.join(',')});
+      limit ${everyID.length};
+    `;
+    const gamesFromIGDB = await callIGDB('games', gameQuery);
+
+    if (!gamesFromIGDB?.length) {
+      return httpResponses.notFound(res, 'No games found or none meet GSDB criteria.');
+    }
+
+    // 4. Obtener los covers únicos usados (una sola llamada con limit)
+    const coverIDs = gamesFromIGDB
+      .map(game => game.cover)
+      .filter(Boolean);
+
+    const coverMap = {};
+    if (coverIDs.length) {
+      const coverQuery = `
+        fields id, image_id;
+        where id = (${[...new Set(coverIDs)].join(',')});
+        limit ${coverIDs.length};
+      `;
+      const coversFromIGDB = await callIGDB('covers', coverQuery);
+
+      coversFromIGDB.forEach(c => {
+        coverMap[c.id] = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${c.image_id}.jpg`;
+      });
+    }
+
+    // 5. Preparar juegos para insertar
+    const newGames = gamesFromIGDB.map(game => {
+      const {
+        id: IGDB_ID,
+        name,
+        platforms = [],
+        cover: coverId,
+        slug,
+        url
+      } = game;
+
+      return {
+        title: name,
+        platformsID: platforms.map(id => id.toString()),
+        savesID: [],
+        cover: coverMap[coverId] || config.paths.gameCover_default,
+        IGDB_ID,
+        IGDB_url: url,
+        slug,
+        external: false,
+      };
+    });
+
+    // 6. Insertar en lote
+    const createdGames = await Games.insertMany(newGames, { ordered: false });
+
+    return httpResponses.created(
+      res,
+      `${createdGames.length} games added successfully.`,
+      createdGames
+    );
+
+  } catch (err) {
+    console.error('[ERROR] Could not add games from IGDB:', err);
+    return httpResponses.internalError(res, 'Error adding games', err.message || err);
+  }
+});
+
+
+
 /**
  * @route DELETE api/games/:id
  * @desc delete game by id
@@ -302,7 +410,7 @@ router.post('/:id/favorites', authenticateMW, async (req, res) => {
     const loggedUser = req.user;
 
     if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
-    
+
     const game = await Games.findById(gameId);
     if (!game) return httpResponses.notFound(res, 'Game not found');
 
