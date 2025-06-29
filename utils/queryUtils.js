@@ -1,3 +1,5 @@
+const { Platforms } = require('../models/Platforms');
+
 //funciones para interactuar con peticiones a mongodb
 
 /**
@@ -12,10 +14,7 @@ function buildMongoFilter(query, modelFields) {
     const filter = {};
     if (!query || Object.keys(query).length === 0) return undefined
 
-    //mapeamos todas las funcionalidades de mongodb (lo que sería un where)
-    //gt: greater than. gte: greater than equal. etc
-    //por ahora, permitimos todos los operandos en todos los tipos. Esto generara cosas raras como un >= para strings, pero, la programacion permite esto idk
-    const mongoOpMap = { gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte', eq: '$eq', ne: '$ne', like: '$regex' };
+    const mongoOpMap = { gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte', eq: '$eq', ne: '$ne', like: '$regex', start: '$regex', end: '$regex', in: '$in' };
 
     const allowedKeys = Object.keys(modelFields);
     const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k) && k !== '_id' && k !== 'text');
@@ -26,15 +25,16 @@ function buildMongoFilter(query, modelFields) {
         throw error;
     }
 
+    let platformIDs = []
+    if (allowedKeys.includes("platformID") || allowedKeys.includes("platformsID")) {
+        platformIDs = Platforms.find().distinct('IGDB_ID');
+    }
 
-    //recorremos todos los campos permitidos
     for (const [field, type] of Object.entries(modelFields)) {
-        const value = query[field]; //accedemos al valor introducido para el campo dentro de la query
+        const value = query[field];
         if (value !== undefined) {
-            //si es de tipo objeto, significa que el valor contiene operadores por lo que debemos tratarlos
             if (typeof value === 'object' && !Array.isArray(value)) {
                 filter[field] = {};
-                //comprobamos los operadores que pueda tener el valor
                 for (const op in value) {
                     const mongoOp = mongoOpMap[op];
                     if (mongoOp) {
@@ -42,14 +42,51 @@ function buildMongoFilter(query, modelFields) {
                         try {
                             if (mongoOp === '$regex') {
                                 if (type !== 'string') {
-                                    throw new Error(`Operator 'like' only supported on type 'string'`);
+                                    throw new Error(`Operator '${op}' only supported on type 'string'`);
                                 }
-                                val = String(val);
-                                filter[field][mongoOp] = val;
-                            }
-                            else {
-                                val = castValueByType(val, type);
-                                filter[field][mongoOp] = val;
+                                val = normalizeStr(String(val));
+                                let pattern = val;
+                                if (op === 'like') {
+                                    pattern = `.*${escapeRegExp(val)}.*`;
+                                } else if (op === 'start') {
+                                    pattern = `^${escapeRegExp(val)}`;
+                                } else if (op === 'end') {
+                                    pattern = `${escapeRegExp(val)}$`;
+                                }
+                                filter[field][mongoOp] = new RegExp(pattern, 'i');
+                            } else if (mongoOp === '$in') {
+                                // Si viene string, lo convertimos a array por ; o ,
+                                let arrValues;
+                                if (typeof val === 'string') {
+                                    arrValues = val.split(/[,;]/).map(v => v.trim()).filter(v => v.length > 0);
+                                } else if (Array.isArray(val)) {
+                                    arrValues = val;
+                                } else {
+                                    throw new Error(`Invalid value for 'in' operator; expected string or array`);
+                                }
+                                // casteamos cada valor
+                                const castedValues = arrValues.map(v => castValueByType(v, type));
+
+                                // Validación específica para platformID/platformsID
+                                if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
+                                    const invalid = castedValues.filter(v => !platformIDs.includes(v));
+                                    if (invalid.length > 0) {
+                                        throw new Error(`Invalid platformID(s): ${invalid.join(', ')}`);
+                                    }
+                                }
+
+                                filter[field][mongoOp] = castedValues;
+                            } else {
+                                // Otros operadores normales
+                                const casted = castValueByType(val, type);
+
+                                if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
+                                    if (!platformIDs.includes(casted)) {
+                                        throw new Error(`Invalid platformID: ${casted}`);
+                                    }
+                                }
+
+                                filter[field][mongoOp] = casted;
                             }
                         } catch (err) {
                             const error = new Error(`Field '${field}' operator '${op}': ${err.message}`);
@@ -60,8 +97,20 @@ function buildMongoFilter(query, modelFields) {
                 }
             } else {
                 try {
-                    const val = castValueByType(value, type);
-                    filter[field] = val;
+                    if (type === 'string') {
+                        const normalized = normalizeStr(value);
+                        filter[field] = { $regex: new RegExp(`^${escapeRegExp(normalized)}$`, 'i') };
+                    } else {
+                        const casted = castValueByType(value, type);
+
+                        if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
+                            if (!platformIDs.includes(casted)) {
+                                throw new Error(`Invalid platformID: ${casted}`);
+                            }
+                        }
+
+                        filter[field] = casted;
+                    }
                 } catch (err) {
                     const error = new Error(`Field '${field}': ${err.message}`);
                     error.name = 'InvalidQueryFields';
@@ -72,10 +121,10 @@ function buildMongoFilter(query, modelFields) {
     }
 
     return filter;
-} 
+}
 
-function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
-    if (!rawQuery || Object.keys(rawQuery).length === 0) return '';
+async function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
+    if (!rawQuery || Object.keys(rawQuery).length === 0) rawQuery = {};
 
     const igdbOpMap = {
         gt: '>',
@@ -84,10 +133,33 @@ function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
         lte: '<=',
         eq: '=',
         ne: '!=',
-        like: '~',   // "*val*"
-        start: '~',  // "val*"
-        end: '~'     // "*val"
+        like: '~',
+        start: '~',
+        end: '~',
+        in: '='
     };
+
+    const stringOnlyOps = ['like', 'start', 'end'];
+    const allowedKeys = Object.keys(modelFields);
+    const invalidKeys = Object.keys(rawQuery).filter(k => !allowedKeys.includes(k));
+    if (invalidKeys.length > 0) {
+        const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);
+        error.name = 'InvalidQueryFields';
+        throw error;
+    }
+
+    // Obtener lista de plataformas válidas
+    const platformIDs = await Platforms.find().distinct('IGDB_ID');
+
+    // --- Detectar si existe platformID/platformsID en el modelo y su campo IGDB ---
+    let platformFieldIGDB = null;
+    for (const key of ['platformID', 'platformsID']) {
+        if (modelFields[key]) {
+            const igdbField = mapFiltersFn({ [key]: 1 });
+            platformFieldIGDB = igdbField ? Object.keys(igdbField)[0] : key;
+            break;
+        }
+    }
 
     const conditions = [];
 
@@ -95,41 +167,167 @@ function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
         const value = rawQuery[localField];
         if (value === undefined) continue;
 
-        // Mapear el campo local a IGDB
-        const igdbField = mapFiltersFn({ [localField]: 1 }) ? Object.keys(mapFiltersFn({ [localField]: 1 }))[0] : localField;
+        const igdbField = mapFiltersFn({ [localField]: 1 })
+            ? Object.keys(mapFiltersFn({ [localField]: 1 }))[0]
+            : localField;
+
+        const isPlatformField = localField === 'platformID' || localField === 'platformsID';
 
         if (typeof value === 'object' && !Array.isArray(value)) {
             for (const [op, valRaw] of Object.entries(value)) {
                 const opSymbol = igdbOpMap[op];
                 if (!opSymbol) continue;
 
-                // Ignorar like sobre title (se usa search)
-                if (op === 'like' && localField === 'title') continue;
+                try {
+                    if (stringOnlyOps.includes(op) && type !== 'string') {
+                        throw new Error(`Operator '${op}' is only supported on type 'string'`);
+                    }
 
-                const val = String(valRaw).replace(/["\\]/g, '');
+                    if (op === 'in') {
+                        let arrValues;
+                        if (typeof valRaw === 'string') {
+                            arrValues = valRaw.split(/[,;]/).map(v => v.trim()).filter(v => v.length > 0);
+                        } else if (Array.isArray(valRaw)) {
+                            arrValues = valRaw;
+                        } else {
+                            throw new Error(`Invalid value for 'in' operator; expected string or array`);
+                        }
 
-                if (op === 'like') {
-                    conditions.push(`${igdbField} ${opSymbol} "*${val}*"`);
-                } else if (op === 'start') {
-                    conditions.push(`${igdbField} ${opSymbol} "${val}*"`);
-                } else if (op === 'end') {
-                    conditions.push(`${igdbField} ${opSymbol} "*${val}"`);
-                } else if (typeof valRaw === 'string') {
-                    conditions.push(`${igdbField} ${opSymbol} "${val}"`);
-                } else {
-                    conditions.push(`${igdbField} ${opSymbol} ${val}`);
+                        const castedValues = arrValues.map(v => formatValueForIGDB(v, type));
+                        if (isPlatformField && platformIDs.length > 0) {
+                            const invalid = castedValues.filter(v => !platformIDs.includes(Number(v)));
+                            if (invalid.length > 0) {
+                                throw new Error(`Invalid platformID(s): ${invalid.join(', ')}`);
+                            }
+                        }
+
+                        conditions.push(`${igdbField} = (${castedValues.join(', ')})`);
+                    } else {
+                        const valFormatted = formatValueForIGDB(valRaw, type);
+                        if (isPlatformField && platformIDs.length > 0 && !platformIDs.includes(Number(valFormatted))) {
+                            throw new Error(`Invalid platformID: ${valFormatted}`);
+                        }
+
+                        if (op === 'like') {
+                            conditions.push(`${igdbField} ${opSymbol} *${valFormatted}*`);
+                        } else if (op === 'start') {
+                            conditions.push(`${igdbField} ${opSymbol} ${valFormatted}*`);
+                        } else if (op === 'end') {
+                            conditions.push(`${igdbField} ${opSymbol} *${valFormatted}`);
+                        } else {
+                            conditions.push(`${igdbField} ${opSymbol} ${valFormatted}`);
+                        }
+                    }
+                } catch (err) {
+                    const error = new Error(`Field '${localField}' operator '${op}': ${err.message}`);
+                    error.name = 'InvalidQueryFields';
+                    throw error;
                 }
             }
         } else {
-            // Valor simple = igualdad
-            const val = String(value).replace(/["\\]/g, '');
-            conditions.push(`${igdbField} = "${val}"`);
+            try {
+                const valFormatted = formatValueForIGDB(value, type);
+                if (isPlatformField && platformIDs.length > 0 && !platformIDs.includes(Number(valFormatted))) {
+                    throw new Error(`Invalid platformID: ${valFormatted}`);
+                }
+                conditions.push(`${igdbField} = ${valFormatted}`);
+            } catch (err) {
+                const error = new Error(`Field '${localField}': ${err.message}`);
+                error.name = 'InvalidQueryFields';
+                throw error;
+            }
         }
     }
 
-    return conditions.join(' & ');
+    let result = conditions.join(' & ');
+
+    // Si se detectó platformFieldIGDB, pero no hay ningún filtro para él, añadimos todos por defecto
+    if (platformFieldIGDB && !conditions.some(c => c.startsWith(`${platformFieldIGDB} `))) {
+        result += (result ? ' & ' : '') + `${platformFieldIGDB} = (${platformIDs.join(',')})`;
+    }
+
+    return result;
 }
 
+
+/**
+ * Filtra un array de objetos en memoria según la query y los campos permitidos.
+ * 
+ * @param {Array<Object>} dataArray - Array de objetos a filtrar
+ * @param {Object} query - Parámetros de filtrado (ejemplo req.query)
+ * @param {Object} modelFields - Campos permitidos con tipo (ejemplo { title: 'string', external: 'boolean' })
+ * @returns {Array<Object>} - Array filtrado
+ */
+function filterData(dataArray, query, modelFields) {
+    if (!query || Object.keys(query).length === 0) return dataArray;
+
+    // Validar campos inválidos
+    const allowedKeys = Object.keys(modelFields);
+    const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k));
+    if (invalidKeys.length > 0) {
+        const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);
+        error.name = 'InvalidQueryFields';
+        throw error;
+    }
+
+    // Funciones para evaluar operadores
+    const operators = {
+        gt: (a, b) => a > b,
+        gte: (a, b) => a >= b,
+        lt: (a, b) => a < b,
+        lte: (a, b) => a <= b,
+        eq: (a, b) => a === b,
+        ne: (a, b) => a !== b,
+        like: (a, b) => typeof a === 'string' && new RegExp(escapeRegExp(b), 'i').test(normalizeStr(a)),
+        start: (a, b) => typeof a === 'string' && normalizeStr(a).startsWith(normalizeStr(b)),
+        end: (a, b) => typeof a === 'string' && normalizeStr(a).endsWith(normalizeStr(b)),
+    };
+
+    return dataArray.filter(item => {
+        for (const [field, type] of Object.entries(modelFields)) {
+            const queryVal = query[field];
+            if (queryVal === undefined) continue;
+
+            const itemVal = item[field];
+
+            if (typeof queryVal === 'object' && !Array.isArray(queryVal)) {
+                // Operadores múltiples
+                for (const op in queryVal) {
+                    const opFunc = operators[op];
+                    if (!opFunc) continue;
+
+                    let castedQueryVal;
+                    try {
+                        castedQueryVal = castValueByType(queryVal[op], type);
+                    } catch (err) {
+                        const error = new Error(`Field '${field}' operator '${op}': ${err.message}`);
+                        error.name = 'InvalidQueryFields';
+                        throw error;
+                    }
+
+                    if (!opFunc(itemVal, castedQueryVal)) return false;
+                }
+            } else {
+                // Igualdad simple
+                let castedQueryVal;
+                try {
+                    castedQueryVal = castValueByType(queryVal, type);
+                } catch (err) {
+                    const error = new Error(`Field '${field}': ${err.message}`);
+                    error.name = 'InvalidQueryFields';
+                    throw error;
+                }
+                if (type === 'string') {
+                    if (normalizeStr(String(itemVal)) !== normalizeStr(String(castedQueryVal))) return false;
+                } else {
+                    if (itemVal !== castedQueryVal) return false;
+                }
+
+            }
+        }
+        return true;
+    });
+}
 
 
 /**
@@ -161,5 +359,48 @@ function castValueByType(value, type) {
     }
 }
 
+function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+/**
+ * Formatea un valor según su tipo para usarlo en una query de IGDB.
+ * - Strings se devuelven entre comillas dobles.
+ * - Números y booleanos se devuelven como string sin comillas.
+ * - Fechas se convierten a timestamp UNIX (segundos).
+ */
+function formatValueForIGDB(value, type) {
+    switch (type) {
+        case 'number':
+            if (isNaN(Number(value))) {
+                throw new Error(`Invalid number value: '${value}'`);
+            }
+            return String(Number(value));
 
-module.exports = { buildMongoFilter, buildIGDBFilter };
+        case 'boolean':
+            if (value === 'true' || value === true) return '1';
+            if (value === 'false' || value === false) return '0';
+            throw new Error(`Invalid boolean value: '${value}'`);
+
+        case 'date':
+            const date = new Date(value);
+            if (isNaN(date.getTime())) {
+                throw new Error(`Invalid date value: '${value}'`);
+            }
+            return String(Math.floor(date.getTime() / 1000)); // UNIX timestamp en segundos
+
+        case 'string':
+        default:
+            // Escapar comillas dobles por seguridad
+            const safe = String(value).replace(/["\\]/g, '');
+            return `"${safe}"`;
+    }
+}
+
+
+function normalizeStr(str) {
+    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+
+
+module.exports = { buildMongoFilter, buildIGDBFilter, filterData };

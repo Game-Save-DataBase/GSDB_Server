@@ -29,7 +29,7 @@ const filterFields = {
     family: 'string',
     IGDB_ID: 'number'
 };
-
+//IDS UTILES: 6 - windows pc, 14 - mac, 3 - linux, 13 - DOS
 
 const Platforms = mongoose.models.Platforms || mongoose.model('Platforms', PlatformSchema);
 module.exports = {Platforms,filterFields}

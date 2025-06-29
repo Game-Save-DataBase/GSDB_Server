@@ -16,4 +16,22 @@ module.exports = {
   tooManyRequests: (res, message = 'Too Many Requests') => res.status(429).json({ error: 'TOO_MANY_REQUESTS', message }),
   internalError: (res, message = 'Internal Server Error') => res.status(500).json({ error: 'INTERNAL_SERVER_ERROR', message }),
   serviceUnavailable: (res, message = 'Service Unavailable') => res.status(503).json({ error: 'SERVICE_UNAVAILABLE', message }),
+
+
+  mapStatusToHttpError: (status, message) => {
+    switch (status) {
+      case 400: return { handler: module.exports.badRequest, code: 400 };
+      case 401: return { handler: module.exports.unauthorized, code: 401 };
+      case 403: return { handler: module.exports.forbidden, code: 403 };
+      case 404: return { handler: module.exports.notFound, code: 404 };
+      case 405: return { handler: module.exports.methodNotAllowed, code: 405 };
+      case 409: return { handler: module.exports.conflict, code: 409 };
+      case 422: return { handler: module.exports.unprocessableEntity, code: 422 };
+      case 429: return { handler: module.exports.tooManyRequests, code: 429 };
+      case 503: return { handler: module.exports.serviceUnavailable, code: 503 };
+      default: return { handler: module.exports.internalError, code: 500 };
+    }
+  },
 };
+
+

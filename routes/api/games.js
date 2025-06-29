@@ -3,10 +3,11 @@ const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { buildMongoFilter, buildIGDBFilter } = require('../../utils/queryUtils');
-const { Games, filterFields, mapFiltersToIGDB } = require('../../models/games');
-const { Platforms } = require('../../models/platforms');
+const { Games, filterFields, mapFiltersToIGDB, processQuery } = require('../../models/Games');
+const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices')
+const { getSaveFileLocations } = require('../../services/pcgwServices');
 const config = require('../../utils/config');
 
 
@@ -26,112 +27,154 @@ router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'game rou
 router.get('/', async (req, res) => {
   try {
     const query = { ...req.query };
-    const searchIGDB = query.searchIGDB === 'true';
-    delete query.searchIGDB;
-
+    const isExternal = (!query.external || query.external === 'true' || query.external === true)
     if (query._id) {
-      const game = await Games.findById(query._id);
-      if (!game) return httpResponses.notFound(res, `Game with id ${query._id} not found`);
-      return httpResponses.ok(res, game);
-    }
+      let game = null;
 
+      // Solo intentamos buscar por _id si es un ObjectId válido (24 caracteres hex)
+      if (typeof query._id === 'string' && /^[a-f\d]{24}$/i.test(query._id)) {
+        game = await Games.findById(query._id);
+        if (game) return httpResponses.ok(res, game);
+      }
+
+      // Intentamos buscar por IGDB_ID (puede ser string o number)
+      const gamesByIGDB = await Games.find({ IGDB_ID: query._id });
+      if (gamesByIGDB.length > 0) {
+        return httpResponses.ok(res, gamesByIGDB);
+      }
+
+      if (!isExternal) {
+        return httpResponses.notFound(res, `Game with id or IGDB_ID '${query._id}' not found`);
+      }
+    }
     const limit = Math.min(Math.max(parseInt(query.limit) || 30, 1), 100);
     const offset = Math.max(parseInt(query.offset) || 0, 0);
     delete query.limit;
     delete query.offset;
 
-    if (searchIGDB) {
-      // Construimos el filtro where para IGDB usando la query y el mapeo
+    // Detectamos si external está explícitamente a 'false' (string)
+    if (!isExternal) {
+      // Solo juegos locales, filtro con Mongo
+      // Eliminamos external para no interferir en la consulta mongoose
+      delete query.external;
 
-      const platformIDs = await Platforms.find().distinct('IGDB_ID');
+      const mongoFilter = buildMongoFilter(query, filterFields);
+      // Consulta con paginación
+      const games = await Games.find(mongoFilter)
+        .skip(offset)
+        .limit(limit);
 
-
-      const whereString = buildIGDBFilter(query, filterFields, mapFiltersToIGDB);
-      const baseConditions = [
-        'version_parent = null',
-        `platforms = (${platformIDs.join(',')})`,
-        'game_type = (11,8,4,0)'
-      ];
-      if (whereString) {
-        baseConditions.push(whereString);
-      }
-      const finalWhere = `${baseConditions.join(' & ')}`;
-
-      console.log(whereString)
-      // Armamos la query IGDB completa
-      let igdbQuery = `
-          fields name, cover, platforms, slug, id, url;
-          limit ${limit};
-          offset ${offset};
-          where ${finalWhere};
-        `;
-      if (query.title && typeof query.title === 'object' && query.title.like) {
-        igdbQuery = `search "${query.title.like}";\n` + igdbQuery;
-      }
-
-      console.log(igdbQuery);
-
-      const igdbResultsRaw = await callIGDB('games', igdbQuery);
-
-      // Enriquecemos con la URL del cover
-      const enrichedGames = await Promise.all(igdbResultsRaw.map(async (game) => {
-        const { name, platforms = [], cover: coverId, slug, id: IGDB_ID, url: IGDB_url } = game;
-
-        let coverURL = config.paths.gameCover_default;
-        if (coverId) {
-          const coverQuery = `fields image_id; where id = ${coverId};`;
-          const [coverData] = await callIGDB('covers', coverQuery);
-          if (coverData?.image_id) {
-            coverURL = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${coverData.image_id}.jpg`;
-          }
-        }
-
-        return {
-          title: name,
-          platformsID: platforms,
-          savesID: [],
-          cover: coverURL,
-          IGDB_ID,
-          IGDB_url,
-          slug,
-          external: true,
-        };
-      }));
-
-      const igdbIDs = enrichedGames.map(g => g.IGDB_ID);
-      const existingGames = await Games.find({ IGDB_ID: { $in: igdbIDs } });
-      const existingMap = new Map(existingGames.map(game => [game.IGDB_ID, game]));
-      const finalResults = enrichedGames
-        .map(game => existingMap.get(game.IGDB_ID) || game)
-        .sort((a, b) => a.title.localeCompare(b.title));
-      console.log(finalResults)
-      if (finalResults.length === 0) {
+      if (!games || games.length === 0) {
         return httpResponses.noContent(res, 'No coincidences');
       }
 
-      return httpResponses.ok(res, finalResults.length === 1 ? finalResults[0] : finalResults);
+      // Ordenar localmente por título
+      games.sort((a, b) => a.title.localeCompare(b.title));
+
+      return httpResponses.ok(res, games.length === 1 ? games[0] : games);
     }
+    delete query.external;
+    // Si no es external=false => mezcla IGDB + local y filtro de datos en memoria
 
-    // Filtro local para Mongo
-    const filter = buildMongoFilter(query, filterFields);
-    let gamesQuery = Games.find(filter).sort({ title: 1 }).skip(offset);
-    if (limit > 0) gamesQuery = gamesQuery.limit(limit);
+    // Obtener plataformas IGDB para filtro
+    const fixedQuery = processQuery(query)
+    console.log(fixedQuery)
+    // Construimos el filtro IGDB
+    const whereString = await buildIGDBFilter(fixedQuery, filterFields, mapFiltersToIGDB);
+    const baseConditions = [
+      'version_parent = null',
+      'game_type = (11,8,4,0)'
+      // 'game_status != 6'
+    ];
+    if (whereString) {
+      baseConditions.push(whereString);
+    }
+    const finalWhere = baseConditions.join(' & ');
 
-    const games_response = await gamesQuery;
+    const igdbQuery = `
+      fields name, cover, platforms, slug, id, url, first_release_date;
+      limit ${limit};
+      offset ${offset};
+      where ${finalWhere};
+      sort id asc;
+    `;
+    console.log(igdbQuery)
+    const igdbResultsRaw = await callIGDB('games', igdbQuery);
 
-    if (games_response.length === 0) {
+    // IDs para buscar en local
+    const igdbIDs = igdbResultsRaw.map(g => g.id);
+    const existingGames = await Games.find({ IGDB_ID: { $in: igdbIDs } });
+    const existingMap = new Map(existingGames.map(game => [game.IGDB_ID, game]));
+
+    const validPlatformIDsForSaveCheck = [6, 14, 3, 13]; // Windows, Mac, Linux, DOS
+
+    // Creamos el array completo mezclado IGDB + local
+    const mixedGames = await Promise.all(igdbResultsRaw.map(async (game) => {
+      const existing = existingMap.get(game.id);
+      if (existing) {
+        return existing;
+      }
+
+      const { name, platforms = [], cover: coverId, slug, id: IGDB_ID, url: IGDB_url, first_release_date } = game;
+
+      let coverURL = config.paths.gameCover_default;
+      if (coverId) {
+        const coverQuery = `fields image_id; where id = ${coverId};`;
+        const [coverData] = await callIGDB('covers', coverQuery);
+        if (coverData?.image_id) {
+          coverURL = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${coverData.image_id}.jpg`;
+        }
+      }
+      const baseGame = {
+        title: name,
+        platformsID: platforms,
+        savesID: [],
+        cover: coverURL,
+        IGDB_ID,
+        IGDB_url,
+        release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
+        slug,
+        external: true,
+      };
+
+      // Filtrar plataformas que nos interesan para hacer llamada a PCGamingWiki
+      const matchingPlatforms = platforms.filter(p => validPlatformIDsForSaveCheck.includes(p));
+
+      if (matchingPlatforms.length > 0) {
+        const saveData = await getSaveFileLocations(name);
+        if (saveData?.saveLocations?.length) {
+          baseGame.PCGW_ID = saveData.pcgwID;
+          baseGame.PCGW_url = saveData.pcgwURL;
+          baseGame.saveLocations = saveData.saveLocations
+            .filter(loc => matchingPlatforms.includes(loc.platform)) // filtra por platform numérico
+            .map(loc => ({
+              platform: loc.platform,       // ej 6
+              platformName: loc.platformName, // ej "Steam Play (Linux)" o "Windows"
+              locations: loc.locations,
+            }));
+        }
+      }
+
+
+      return baseGame;
+    }));
+
+    if (mixedGames.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
 
-    return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
+    // mixedGames.sort((a, b) => a.title.localeCompare(b.title));
+    mixedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
+    return httpResponses.ok(res, mixedGames.length === 1 ? mixedGames[0] : mixedGames);
 
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
     }
-    return httpResponses.internalError(res, 'Server error', error.message);
+    return httpResponses.internalError(res, error.message);
   }
 });
+
 
 /**
  * @route POST api/games/by-id
@@ -202,7 +245,6 @@ router.post('/', authenticateMW, async (req, res) => {
     const platformIDs = await Platforms.find().distinct('IGDB_ID');
 
     const gameQuery = `fields name, cover, platforms, slug, url; where id = ${IGDB_ID} & platforms = (${platformIDs.join(',')});`;
-    // console.log(gameQuery);
     const [gameFromIGDB] = await callIGDB('games', gameQuery);
 
     if (!gameFromIGDB) {
