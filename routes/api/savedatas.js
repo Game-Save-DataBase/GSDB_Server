@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
     delete query.limit;
     delete query.offset;
 
-    const filter = buildMongoFilter(query, filterFields);
+    const filter = await buildMongoFilter(query, filterFields);
     if (query.text) {
       const searchText = String(query.text);
       const regex = new RegExp(searchText, 'i');
@@ -81,7 +81,7 @@ router.post('/by-id', async (req, res) => {
     const query = req.query;
     let mongoFilter = { _id: { $in: ids } };
     if (Object.keys(query).length) {
-      const additionalFilter = buildMongoFilter(query, filterFields);
+      const additionalFilter = await buildMongoFilter(query, filterFields);
       if (additionalFilter) {
         mongoFilter = { ...mongoFilter, ...additionalFilter };
       }

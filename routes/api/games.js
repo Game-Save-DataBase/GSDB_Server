@@ -54,13 +54,19 @@ router.get('/', async (req, res) => {
 
     // Detectamos si external está explícitamente a 'false' (string)
     if (!isExternal) {
-      // Solo juegos locales, filtro con Mongo
-      // Eliminamos external para no interferir en la consulta mongoose
       delete query.external;
 
-      const mongoFilter = buildMongoFilter(query, filterFields);
-      // Consulta con paginación
-      const games = await Games.find(mongoFilter)
+      let mongoFilter;
+      try {
+        mongoFilter = await buildMongoFilter(query, filterFields);
+      } catch (err) {
+        if (err.name === 'InvalidQueryFields' || err.name === 'DuplicateFilterField') {
+          return httpResponses.badRequest(res, err.message);
+        }
+        throw err;
+      }
+
+      const games = await Games.find(mongoFilter || {})
         .skip(offset)
         .limit(limit);
 
@@ -68,11 +74,11 @@ router.get('/', async (req, res) => {
         return httpResponses.noContent(res, 'No coincidences');
       }
 
-      // Ordenar localmente por título
       games.sort((a, b) => a.title.localeCompare(b.title));
 
       return httpResponses.ok(res, games.length === 1 ? games[0] : games);
     }
+
     delete query.external;
     // Si no es external=false => mezcla IGDB + local y filtro de datos en memoria
 
@@ -207,7 +213,7 @@ router.post('/by-id', async (req, res) => {
     };
 
     if (Object.keys(query).length > 0) {
-      const additionalFilter = buildMongoFilter(query, filterFields);
+      const additionalFilter = await buildMongoFilter(query, filterFields);
       if (additionalFilter) {
         mongoFilter = { ...mongoFilter, ...additionalFilter };
       }
@@ -383,7 +389,7 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
 
       return {
         title: name,
-        platformsID: platforms.map(id => id.toString()),
+        platformID: platforms.map(id => id.toString()),
         savesID: [],
         cover: coverMap[coverId] || config.paths.gameCover_default,
         IGDB_ID,
@@ -394,7 +400,13 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
     });
 
     // 6. Insertar en lote
-    const createdGames = await Games.insertMany(newGames, { ordered: false });
+    // 6. Insertar en lote usando save para que mongoose-sequence funcione
+    const createdGames = await Promise.all(
+      newGames.map(gameData => {
+        const game = new Games(gameData);
+        return game.save();
+      })
+    );
 
     return httpResponses.created(
       res,

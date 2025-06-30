@@ -7,6 +7,8 @@
 const config = require('../utils/config');
 
 const mongoose = require('mongoose');
+const AutoIncrement = require('mongoose-sequence')(mongoose);
+
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 
 const UserSchema = new mongoose.Schema({
@@ -17,10 +19,10 @@ const UserSchema = new mongoose.Schema({
     admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
     verified: { type: Boolean, default: false },    //indica si es un usuario verificado
     rating: { type: Number, default: 0 },             //valoracion del usuario 
-    favGames: { type: [String], default: [] },    //lista de juegos marcados como favoritos
-    favSaves: { type: [String], default: [] },    //lista de archivos marcados como favoritos
-    following: { type: [String], default: [] },   //lista de usuarios a los que sigue
-    followers: { type: [String], default: [] },   //lista de usuarios que le siguen
+    favGames: { type: [Number], default: [] },    //lista de juegos marcados como favoritos
+    favSaves: { type: [Number], default: [] },    //lista de archivos marcados como favoritos
+    following: { type: [Number], default: [] },   //lista de usuarios a los que sigue
+    followers: { type: [Number], default: [] },   //lista de usuarios que le siguen
     uploads: { type: [String], default: [] },       //lista de archivos subidos por este usuario
     pfp: { type: String, default: config.paths.pfp_default }, //imagen de perfil
     banner: { type: String, default: config.paths.banner_default }, //imagen de banner de perfil
@@ -29,8 +31,8 @@ const UserSchema = new mongoose.Schema({
     reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
         type: [
             {
-                saveID: { type: String },
-                rating: { type: String }
+                saveID: { type: Number },
+                rating: { type: Number }
             }
         ], default: []
     },
@@ -49,7 +51,8 @@ const UserSchema = new mongoose.Schema({
 
     } 
 });
-
+// Añade el campo 'id' autoincremental
+UserSchema.plugin(AutoIncrement, { inc_field: 'userID', start_seq: 0 });
 /**
  * campos del modelo por los cuales se podra filtrar y su tipo en una cadena
  */

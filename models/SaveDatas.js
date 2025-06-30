@@ -5,11 +5,11 @@
  * */
 
 const mongoose = require('mongoose');
+const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const SavesSchema = new mongoose.Schema({
-
-    userID: { type: String, required: true },       //id del usuario registrado que ha realizado la subida
-    gameID: { type: String, required: true },       //ID al juego en nuestra base de datos
+    userID: { type: Number, required: true },       //id del usuario registrado que ha realizado la subida
+    gameID: { type: Number, required: true },       //ID al juego en nuestra base de datos
     platformID: { type: Number, required: true },   //ID a una plataforma en nuestra base de datos 
     file: { type: String, default: "" },   //ruta en el servidor donde se guarda el archivo
     private: { type: Boolean, default: false },    //indica si es un archivo que no se verá por el resto de usuarios
@@ -19,6 +19,7 @@ const SavesSchema = new mongoose.Schema({
     nDownloads: { type: Number, default: 0 },
     rating: { type: Number, default: 0 } //valoracion del save
 });
+SavesSchema.plugin(AutoIncrement, { inc_field: 'saveID', start_seq: 0 });
 
 /**
  * campos del modelo por los cuales se podra filtrar y su tipo en una cadena

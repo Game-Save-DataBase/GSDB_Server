@@ -5,9 +5,9 @@
  * Plataformas extraidas de IGDB. 
  * https://api-docs.igdb.com/#platform
  * */
-const config = require('../utils/config');
 
 const mongoose = require('mongoose');
+const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const PlatformSchema = new mongoose.Schema({
     abbreviation: { type: String, required: true },       //STRING UNICO. Las plataformas que tienen este valor SON LAS QUE HAY QUE USAR. Porque existen algunas como "dsi" que tenemos que ignorar, y esas no tienen abbreviation.      //titulo del juego
@@ -19,6 +19,7 @@ const PlatformSchema = new mongoose.Schema({
     url: { type: String, required:true }, //url de igdb
     IGDB_ID: {type: Number, required:true}//id de igdb
 });
+PlatformSchema.plugin(AutoIncrement, { inc_field: 'platformID', start_seq: 0 });
 
 const filterFields = {
     abbreviation: 'string',

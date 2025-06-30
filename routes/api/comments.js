@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
       return httpResponses.ok(res, comment);
     }
 
-    const filter = buildMongoFilter(query, filterFields);
+    const filter = await buildMongoFilter(query, filterFields);
     const comments_response = await Comments.find(filter);
 
     if (comments_response.length === 0) {
@@ -63,7 +63,7 @@ router.post('/by-id', async (req, res) => {
     let mongoFilter = { _id: { $in: ids } };
 
     if (Object.keys(query).length > 0) {
-      const additionalFilter = buildMongoFilter(query, filterFields);
+      const additionalFilter = await buildMongoFilter(query, filterFields);
       if (additionalFilter) mongoFilter = { ...mongoFilter, ...additionalFilter };
     }
 

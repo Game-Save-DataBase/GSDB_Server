@@ -9,20 +9,21 @@
 const config = require('../utils/config');
 
 const mongoose = require('mongoose');
+const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const GameSchema = new mongoose.Schema({
     title: { type: String, required: true },             //titulo del juego
     release_date: { type: Date },
     slug: { type: String, required: true, unique: true },
-    platformsID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
-    savesID: { type: [String], default: [] },       //todos los ID de los saves subidos para este juego
+    platformID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
+    savesID: { type: [Number], default: [] },       //todos los ID de los saves subidos para este juego
     cover: { type: String, default: config.paths.gameCover_default }, //ruta de la imagen caratula  
     IGDB_ID: { type: Number, required: true },
     IGDB_url: { type: String, required: false },
     PCGW_ID: { type: String }, //es lo que se usa al final de la url
     PCGW_url: { type: String },
     external: { type: Boolean, required: true },
-    userFav: { type: [String], default: [] },    //usuarios que marcaron el juego como favorito
+    userFav: { type: [Number], default: [] },    //usuarios que marcaron el juego como favorito
     saveLocations: [
         {
             platform: { type: Number, required: true }, //id de nuestras plataformas (las de igdb)
@@ -31,11 +32,12 @@ const GameSchema = new mongoose.Schema({
         }
     ]
 });
+GameSchema.plugin(AutoIncrement, { inc_field: 'gameID', start_seq: 0 });
 
 const filterFields = {
     _id: 'number', //para mongodb no es un number, tampoco un string, pero en ese caso se va a ingorar. esto es para poder filtrar desde la api usando el comando "id" por algo que sea distinto 
     title: 'string',
-    // platformsID: 'number', //aunque se guarden en un array, permitimos hacer un filtro rapido con una plataforma
+    platformID: 'array:number', 
     IGDB_ID: 'number',
     external: 'boolean',
     release_date: 'date',
@@ -62,8 +64,6 @@ const linkedFields = {
         foreignKey: 'IGDB_ID'
     }
 };
-
-
 
 
 function mapFiltersToIGDB(localFilters) {
@@ -168,6 +168,7 @@ function processQuery(query) {
 
     return newQuery;
 }
+
 
 
 

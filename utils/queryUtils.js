@@ -1,127 +1,171 @@
-const { Platforms } = require('../models/Platforms');
-
 //funciones para interactuar con peticiones a mongodb
 
 /**
- * Construye un filtro para MongoDB basado en la query recibida y los campos permitidos
+ * Construye un filtro para MongoDB incluyendo filtros relacionales.
  * 
- * @param {Object} query - Parámetros de consulta recibidos, por ejemplo req.query
- * @param {Object} modelFields - Campos permitidos para filtrar, en formato { fieldName: tipoDato }
- * @returns {Object} filter - Filtro para usar en consultas MongoDB
+ * @param {Object} query - Parámetros de consulta recibidos (ej. req.query)
+ * @param {Object} modelFields - Campos permitidos para filtrar en el modelo principal
+ * @returns {Object} Filtro para usar directamente en MongoDB
  */
+const { getModelDefinition } = require('../models/modelRegistry');
 
-function buildMongoFilter(query, modelFields) {
+/**
+ * Construye un filtro para MongoDB incluyendo filtros relacionales.
+ * 
+ * @param {Object} query - Parámetros de consulta recibidos (ej. req.query)
+ * @param {Object} modelFields - Campos permitidos para filtrar en el modelo principal
+ * @returns {Object} Filtro para usar directamente en MongoDB
+ */
+async function buildMongoFilter(query, modelFields, visitedRelations = []) {
     const filter = {};
-    if (!query || Object.keys(query).length === 0) return undefined
+    if (!query || Object.keys(query).length === 0) return undefined;
 
-    const mongoOpMap = { gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte', eq: '$eq', ne: '$ne', like: '$regex', start: '$regex', end: '$regex', in: '$in' };
+    const mongoOpMap = {
+        gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte',
+        eq: '$eq', ne: '$ne', like: '$regex',
+        start: '$regex', end: '$regex', in: '$in', nin: '$nin'
+    };
 
     const allowedKeys = Object.keys(modelFields);
-    const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k) && k !== '_id' && k !== 'text');
+    const relationalFilters = {};
+    const directFilters = {};
 
-    if (invalidKeys.length > 0) {
-        const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);
-        error.name = 'InvalidQueryFields';
-        throw error;
+    // Separar filtros directos y relacionales (anidados arbitrarios)
+    for (const key of Object.keys(query)) {
+        if (key.includes('.')) {
+            const [relation, ...rest] = key.split('.');
+            const subfield = rest.join('.');
+            if (!relationalFilters[relation]) relationalFilters[relation] = {};
+            if (relationalFilters[relation][subfield]) {
+                const error = new Error(`Duplicate relational filter: ${relation}.${subfield}`);
+                error.name = 'DuplicateFilterField';
+                throw error;
+            }
+            relationalFilters[relation][subfield] = query[key];
+        } else {
+            if (!allowedKeys.includes(key) && key !== '_id' && key !== 'text') {
+                const error = new Error(`Invalid parameter: ${key}`);
+                error.name = 'InvalidQueryFields';
+                throw error;
+            }
+            if (directFilters[key]) {
+                const error = new Error(`Duplicate direct filter: ${key}`);
+                error.name = 'DuplicateFilterField';
+                throw error;
+            }
+            directFilters[key] = query[key];
+        }
     }
 
-    let platformIDs = []
-    if (allowedKeys.includes("platformID") || allowedKeys.includes("platformsID")) {
-        platformIDs = Platforms.find().distinct('IGDB_ID');
+    // Procesar filtros relacionales recursivamente
+    for (const relation of Object.keys(relationalFilters)) {
+        if (visitedRelations.includes(relation)) {
+            // Evitar ciclos infinitos
+            continue;
+        }
+
+        const relationDef = getModelDefinition(relation);
+        if (!relationDef) {
+            throw new Error(`Model definition for relation '${relation}' not found`);
+        }
+
+        const subQuery = relationalFilters[relation];
+        // Recursividad: filtro para submodelo con acumulación de relaciones visitadas
+        const subFilter = await buildMongoFilter(subQuery, relationDef.filterFields, [...visitedRelations, relation]);
+
+        // Buscar IDs relacionados que cumplen filtro en submodelo
+        const relatedDocs = await relationDef.model.find(subFilter, { _id: 0, IGDB_ID: 1 }).lean();
+        const ids = relatedDocs.map(doc => doc.IGDB_ID);
+
+        const foreignKey = relationDef.foreignKey;
+
+        if (filter[foreignKey]) {
+            const error = new Error(`Duplicate relational filter key: ${foreignKey}`);
+            error.name = 'DuplicateFilterField';
+            throw error;
+        }
+
+        filter[foreignKey] = ids.length > 0 ? { $in: ids } : { $in: [-99999999] };
     }
 
+    // Procesar filtros directos
     for (const [field, type] of Object.entries(modelFields)) {
-        const value = query[field];
-        if (value !== undefined) {
-            if (typeof value === 'object' && !Array.isArray(value)) {
-                filter[field] = {};
-                for (const op in value) {
-                    const mongoOp = mongoOpMap[op];
-                    if (mongoOp) {
-                        let val = value[op];
-                        try {
-                            if (mongoOp === '$regex') {
-                                if (type !== 'string') {
-                                    throw new Error(`Operator '${op}' only supported on type 'string'`);
-                                }
-                                val = normalizeStr(String(val));
-                                let pattern = val;
-                                if (op === 'like') {
-                                    pattern = `.*${escapeRegExp(val)}.*`;
-                                } else if (op === 'start') {
-                                    pattern = `^${escapeRegExp(val)}`;
-                                } else if (op === 'end') {
-                                    pattern = `${escapeRegExp(val)}$`;
-                                }
-                                filter[field][mongoOp] = new RegExp(pattern, 'i');
-                            } else if (mongoOp === '$in') {
-                                // Si viene string, lo convertimos a array por ; o ,
-                                let arrValues;
-                                if (typeof val === 'string') {
-                                    arrValues = val.split(/[,;]/).map(v => v.trim()).filter(v => v.length > 0);
-                                } else if (Array.isArray(val)) {
-                                    arrValues = val;
-                                } else {
-                                    throw new Error(`Invalid value for 'in' operator; expected string or array`);
-                                }
-                                // casteamos cada valor
-                                const castedValues = arrValues.map(v => castValueByType(v, type));
+        const value = directFilters[field];
+        if (value === undefined) continue;
 
-                                // Validación específica para platformID/platformsID
-                                if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
-                                    const invalid = castedValues.filter(v => !platformIDs.includes(v));
-                                    if (invalid.length > 0) {
-                                        throw new Error(`Invalid platformID(s): ${invalid.join(', ')}`);
-                                    }
-                                }
+        if (filter[field]) {
+            const error = new Error(`Duplicate filter for field: ${field}`);
+            error.name = 'DuplicateFilterField';
+            throw error;
+        }
 
-                                filter[field][mongoOp] = castedValues;
-                            } else {
-                                // Otros operadores normales
-                                const casted = castValueByType(val, type);
+        const isArray = isArrayType(type);
 
-                                if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
-                                    if (!platformIDs.includes(casted)) {
-                                        throw new Error(`Invalid platformID: ${casted}`);
-                                    }
-                                }
+        if (typeof value === 'object' && !Array.isArray(value)) {
+            // value con operadores { eq: ..., in: ..., etc }
+            filter[field] = {};
+            for (const op in value) {
+                const mongoOp = mongoOpMap[op];
+                if (!mongoOp) continue;
 
-                                filter[field][mongoOp] = casted;
-                            }
-                        } catch (err) {
-                            const error = new Error(`Field '${field}' operator '${op}': ${err.message}`);
-                            error.name = 'InvalidQueryFields';
-                            throw error;
-                        }
+                const val = value[op];
+                const castedVal = castValueByType(val, type);
+
+                if (mongoOp === '$regex') {
+                    if (!type.startsWith('string')) {
+                        throw new Error(`Operator '${op}' only supported for type 'string'`);
                     }
-                }
-            } else {
-                try {
-                    if (type === 'string') {
-                        const normalized = normalizeStr(value);
-                        filter[field] = { $regex: new RegExp(`^${escapeRegExp(normalized)}$`, 'i') };
+                    const normalized = normalizeStr(String(val));
+                    let pattern = normalized;
+                    if (op === 'like') pattern = `.*${escapeRegExp(normalized)}.*`;
+                    else if (op === 'start') pattern = `^${escapeRegExp(normalized)}`;
+                    else if (op === 'end') pattern = `${escapeRegExp(normalized)}$`;
+                    filter[field][mongoOp] = new RegExp(pattern, 'i');
+
+                } else if (isArray) {
+                    if (mongoOp === '$eq') {
+                        // Igualdad exacta: todos y sólo esos elementos (sin importar orden)
+                        const elems = Array.isArray(castedVal) ? castedVal : [castedVal];
+                        filter[field] = {
+                            $all: elems,
+                            $size: elems.length
+                        };
+                    } else if (mongoOp === '$in') {
+                        filter[field] = { $in: Array.isArray(castedVal) ? castedVal : [castedVal] };
+                    } else if (mongoOp === '$nin') {
+                        filter[field] = { $nin: Array.isArray(castedVal) ? castedVal : [castedVal] };
+                    } else if (mongoOp === '$ne') {
+                        // ne como opuesto a eq: no ser exactamente esos elementos
+                        const elems = Array.isArray(castedVal) ? castedVal : [castedVal];
+                        filter.$nor = filter.$nor || [];
+                        filter.$nor.push({ [field]: { $all: elems, $size: elems.length } });
                     } else {
-                        const casted = castValueByType(value, type);
-
-                        if ((field === 'platformID' || field === 'platformsID') && platformIDs.length > 0) {
-                            if (!platformIDs.includes(casted)) {
-                                throw new Error(`Invalid platformID: ${casted}`);
-                            }
-                        }
-
-                        filter[field] = casted;
+                        filter[field] = { $elemMatch: { [mongoOp]: castedVal } };
                     }
-                } catch (err) {
-                    const error = new Error(`Field '${field}': ${err.message}`);
-                    error.name = 'InvalidQueryFields';
-                    throw error;
+
+                } else {
+                    // campo no array
+                    filter[field][mongoOp] = castedVal;
                 }
+            }
+        } else {
+            // valor simple sin operador
+            const casted = castValueByType(value, type);
+
+            if (isArray) {
+                // buscamos que el array contenga todos los elementos pasados
+                filter[field] = { $all: Array.isArray(casted) ? casted : [casted] };
+            } else if (type === 'string') {
+                filter[field] = { $regex: new RegExp(`^${escapeRegExp(normalizeStr(value))}$`, 'i') };
+            } else {
+                filter[field] = casted;
             }
         }
     }
 
     return filter;
 }
+
 
 async function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
     if (!rawQuery || Object.keys(rawQuery).length === 0) rawQuery = {};
@@ -330,32 +374,32 @@ function filterData(dataArray, query, modelFields) {
 }
 
 
-/**
- * Convierte un valor en un tipo especificado
- */
+function isArrayType(type) {
+    return type.startsWith('array:');
+}
+
+function getArrayElementType(type) {
+    return type.split(':')[1];
+}
+
 function castValueByType(value, type) {
+    if (isArrayType(type)) {
+        const subtype = getArrayElementType(type);
+        if (Array.isArray(value)) {
+            return value.map(v => castValueByType(v, subtype));
+        }
+        if (typeof value === 'string') {
+            return value.split(/[,;]/).map(v => castValueByType(v.trim(), subtype));
+        }
+        return [castValueByType(value, subtype)];
+    }
+
     switch (type) {
-        case 'number':
-            if (isNaN(Number(value))) {
-                throw new Error(`Invalid number value: '${value}'`);
-            }
-            return Number(value);
-
-        case 'boolean':
-            if (value === 'true' || value === true) return true;
-            if (value === 'false' || value === false) return false;
-            throw new Error(`Invalid boolean value: '${value}'`);
-
-        case 'date':
-            const date = new Date(value);
-            if (isNaN(date.getTime())) {
-                throw new Error(`Invalid date value: '${value}'`);
-            }
-            return date;
-
-        case 'string':
-        default:
-            return String(value);
+        case 'string': return String(value);
+        case 'number': return Number(value);
+        case 'boolean': return value === 'true' || value === true;
+        case 'date': return new Date(value);
+        default: return value;
     }
 }
 

@@ -25,8 +25,8 @@ router.get('/', async (req, res) => {
       if (!u) return httpResponses.notFound(res, `User with id ${query._id} not found`);
       return httpResponses.ok(res, u);
     }
-
-    const filter = buildMongoFilter(query, filterFields);
+    const filter = await buildMongoFilter(query, filterFields);
+    console.log(query, filterFields, filter)
     const u_response = await Users.find(filter);
 
     // NO devolver 404 si no hay coincidencias, devolver array vacío 200
@@ -58,7 +58,7 @@ router.post('/by-id', async (req, res) => {
     let mongoFilter = { $or: [{ _id: { $in: ids } }, { userName: { $in: userNames } }] };
 
     if (Object.keys(query).length > 0) {
-      const additionalFilter = buildMongoFilter(query, filterFields);
+      const additionalFilter = await buildMongoFilter(query, filterFields);
       mongoFilter = { ...mongoFilter, ...additionalFilter };
     }
 
