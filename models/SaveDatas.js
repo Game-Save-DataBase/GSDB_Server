@@ -17,7 +17,8 @@ const SavesSchema = new mongoose.Schema({
     description: { type: String, default: "" },    //descripcion del archivo
     postedDate: { type: Date, default: Date.now },    // to do: meter un last update date
     nDownloads: { type: Number, default: 0 },
-    rating: { type: Number, default: 0 } //valoracion del save
+    rating: { type: Number, default: 0 }, //valoracion del save
+    tags: { type: [String], required: false } // ids de las tag asociadas a este save
 });
 
 /**

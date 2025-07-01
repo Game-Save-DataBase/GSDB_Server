@@ -106,6 +106,7 @@ router.post('/', uploadSaveFile.single('file'), authenticateMW, async (req, res)
       description: req.body.description,
       userID: req.body.userID,
       file: '',
+      tags: Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags]
     });
 
     const savedata = await newSavedata.save();
