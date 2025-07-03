@@ -14,6 +14,8 @@ const routesSaveDatas = require("./routes/api/savedatas");
 const routesComments = require("./routes/api/comments");
 const routesUsers = require("./routes/api/users");
 const routesAuth= require("./routes/api/auth");
+const routesTags = require("./routes/api/tags");
+
 const { refreshIGDB } = require('./scripts/refreshIGDB');
 
 const app = express();
@@ -65,6 +67,7 @@ app.use(config.api.savedatas, routesSaveDatas);
 app.use(config.api.comments, routesComments);
 app.use(config.api.users, routesUsers);
 app.use(config.api.auth, routesAuth);
+app.use(config.api.tags, routesTags);
 
 app.use(config.paths.assetsFolder, express.static(path.join(__dirname, 'assets')));
 

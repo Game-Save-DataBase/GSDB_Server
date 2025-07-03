@@ -31,7 +31,8 @@ const config = {
         comments: process.env.API+process.env.API_COMMENTS,//localhost:PORT/api/comments
         users: process.env.API+process.env.API_USERS,//localhost:PORT/api/users
         info: process.env.API+process.env.API_INFO,//localhost:PORT/api/info
-        auth: process.env.API+process.env.API_AUTH//localhost:PORT/api/auth
+        auth: process.env.API+process.env.API_AUTH,//localhost:PORT/api/auth
+        tags: process.env.API+process.env.API_TAGS//localhost:PORT/api/tags
     }
 
     //posibilidad de crear funciones para conseguir la ruta de un save o de un usuario. por ejemplo,
