@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter, buildIGDBFilter } = require('../../utils/queryUtils');
-const { Games, filterFields, mapFiltersToIGDB, processQuery } = require('../../models/Games');
+const { findByID, findByQuery } = require('../../utils/queryUtils');
+const { Games, mapFiltersToIGDB, processQuery } = require('../../models/Games');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices')
 const { getSaveFileLocations } = require('../../services/pcgwServices');
 const config = require('../../utils/config');
+const { hasStaticFields } = require('../../models/modelRegistry');
 
 
 /**
@@ -28,59 +29,30 @@ router.get('/', async (req, res) => {
   try {
     const query = { ...req.query };
     const isExternal = (!query.external || query.external === 'true' || query.external === true)
-    if (query._id) {
-      let game = null;
+    delete query.external;
 
-      // Solo intentamos buscar por _id si es un ObjectId válido (24 caracteres hex)
-      if (typeof query._id === 'string' && /^[a-f\d]{24}$/i.test(query._id)) {
-        game = await Games.findById(query._id);
-        if (game) return httpResponses.ok(res, game);
-      }
-
-      // Intentamos buscar por IGDB_ID (puede ser string o number)
-      const gamesByIGDB = await Games.find({ IGDB_ID: query._id });
-      if (gamesByIGDB.length > 0) {
-        return httpResponses.ok(res, gamesByIGDB);
-      }
-
-      if (!isExternal) {
-        return httpResponses.notFound(res, `Game with id or IGDB_ID '${query._id}' not found`);
-      }
-    }
-    const limit = Math.min(Math.max(parseInt(query.limit) || 30, 1), 100);
-    const offset = Math.max(parseInt(query.offset) || 0, 0);
-    delete query.limit;
-    delete query.offset;
-
-    // Detectamos si external está explícitamente a 'false' (string)
+    // Detectamos si external está explícitamente a 'false' (string) -> buscamos solo en mongodb
     if (!isExternal) {
-      delete query.external;
-
-      let mongoFilter;
-      try {
-        mongoFilter = await buildMongoFilter(query, filterFields);
-      } catch (err) {
-        if (err.name === 'InvalidQueryFields' || err.name === 'DuplicateFilterField') {
-          return httpResponses.badRequest(res, err.message);
+      // Buscar por id si viene en la query
+      const fastResult = await findByID(query, 'game');
+      if (fastResult !== undefined) {
+        if (!fastResult) {
+          return httpResponses.noContent(res, 'No coincidences');
         }
-        throw err;
+        return httpResponses.ok(res, fastResult);
       }
 
-      const games = await Games.find(mongoFilter || {})
-        .skip(offset)
-        .limit(limit);
-
-      if (!games || games.length === 0) {
+      // Buscar por query completo
+      const results = await findByQuery(query, 'game');
+      if (results.length === 0) {
         return httpResponses.noContent(res, 'No coincidences');
       }
-
-      games.sort((a, b) => a.title.localeCompare(b.title));
-
-      return httpResponses.ok(res, games.length === 1 ? games[0] : games);
+      return httpResponses.ok(res, results.length === 1 ? results[0] : results);
     }
 
-    delete query.external;
-    // Si no es external=false => mezcla IGDB + local y filtro de datos en memoria
+    //IGNORAMOS POR AHORAAAAAAAAAAAAA
+
+    // Si no es external=false => mezcla IGDB + mongodb
 
     // Obtener plataformas IGDB para filtro
     const fixedQuery = processQuery(query)
@@ -183,133 +155,6 @@ router.get('/', async (req, res) => {
 
 
 /**
- * @route POST api/games/by-id
- * @body ids = [String], platformsID = [String]
- * @desc get all games matching by ids or platformsID
- * @access public
- */
-router.post('/by-id', async (req, res) => {
-  try {
-    const query = req.query;
-    let ids = req.body.ids || [];
-    let platformsID = req.body.platformsID || [];
-
-    if (!Array.isArray(ids)) ids = [ids];
-    if (!Array.isArray(platformsID)) platformsID = [platformsID];
-
-    ids = ids.filter(Boolean);
-    platformsID = platformsID.filter(Boolean);
-
-    // Si ambos arrays están vacíos, devuelvo array vacío
-    if (ids.length === 0 && platformsID.length === 0) {
-      return httpResponses.ok(res, []);
-    }
-
-    let mongoFilter = {
-      $or: [
-        { _id: { $in: ids } },
-        { platformsID: { $in: platformsID } }
-      ]
-    };
-
-    if (Object.keys(query).length > 0) {
-      const additionalFilter = await buildMongoFilter(query, filterFields);
-      if (additionalFilter) {
-        mongoFilter = { ...mongoFilter, ...additionalFilter };
-      }
-    }
-
-    const games_response = await Games.find(mongoFilter);
-    if (games_response === 0) return httpResponses.noContent(res, 'No coincidences');
-
-    return httpResponses.ok(res, games_response.length === 1 ? games_response[0] : games_response);
-  } catch (error) {
-    return httpResponses.internalError(res, 'Error fetching games by ids or platform ids', error.message);
-  }
-});
-
-/**
- * @route POST api/games
- * @desc Añadir un juego a la base de datos usando un ID de IGDB
- * @access Authenticated
- */
-router.post('/', authenticateMW, async (req, res) => {
-  const { IGDB_ID } = req.body;
-
-  if (!IGDB_ID || typeof IGDB_ID !== 'number') {
-    return httpResponses.badRequest(res, 'IGDB_ID is required and must be a number');
-  }
-
-  try {
-    const existing = await Games.findOne({ IGDB_ID });
-    if (existing) {
-      return httpResponses.conflict(res, 'Game already exists in GSDB');
-    }
-
-    // game data
-
-    const platformIDs = await Platforms.find().distinct('IGDB_ID');
-
-    const gameQuery = `fields name, cover, platforms, slug, url; where id = ${IGDB_ID} & platforms = (${platformIDs.join(',')});`;
-    const [gameFromIGDB] = await callIGDB('games', gameQuery);
-
-    if (!gameFromIGDB) {
-      return httpResponses.notFound(res, `Game with ID ${IGDB_ID} does not exist in IGDB or does not follow GSDB restrictions.`);
-    }
-
-    const { name, platforms = [], cover: coverId, slug, url } = gameFromIGDB;
-
-    //2. sacamos la url de la imagen
-    let coverURL = config.paths.gameCover_default;
-    if (coverId) {
-      const coverQuery = `fields image_id; where id = ${coverId};`;
-      const [coverData] = await callIGDB('covers', coverQuery);
-
-      if (coverData?.image_id) {
-        coverURL = `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${coverData.image_id}.jpg`;
-      }
-    }
-
-    // 3: creating game
-    const newGame = {
-      title: name,
-      platformsID: platforms.map(id => id.toString()),
-      savesID: [],
-      cover: coverURL,
-      IGDB_ID,
-      IGDB_url: url,
-      slug,
-      external: false,
-    };
-
-    const createdGame = await Games.create(newGame);
-    return httpResponses.created(res, `Game ${newGame.title} with IGDB ID ${newGame.IGDB_ID} added successfully.`, createdGame);
-
-  } catch (err) {
-    console.error('[ERROR] Could not add game from IGDB:', err);
-    return httpResponses.internalError(res, 'Error adding game', err.message || err);
-  }
-});
-
-/**
- * @route PUT api/games/:id
- * @desc update game by id
- * @access public (authenticated + dev mode)
- */
-router.put('/:id', blockIfNotDev, authenticateMW, async (req, res) => {
-  try {
-    const updated = await Games.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updated) {
-      return httpResponses.notFound(res, 'Game not found');
-    }
-    return httpResponses.ok(res, { message: 'Updated successfully', game: updated });
-  } catch (err) {
-    return httpResponses.badRequest(res, 'Unable to update the game', err.message);
-  }
-});
-
-
-/**
  * @route POST api/games/batch
  * @desc Añadir juegos a la base de datos usando un rango de IDs de IGDB
  * @access Dev only
@@ -348,7 +193,7 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
     // 3. Obtener juegos desde IGDB (una sola llamada con limit)
     const gameQuery = `
       fields id, name, cover, platforms, slug, url;
-      where id = (${everyID.join(',')}) & platforms = (${platformIDs.join(',')});
+      where id = (${everyID.join(',')}) & platforms = (${platformIDs.join(',')}) & version_parent = null & game_type = (11,8,4,0);
       limit ${everyID.length};
     `;
     const gamesFromIGDB = await callIGDB('games', gameQuery);
@@ -427,17 +272,25 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
  * @desc delete game by id
  * @access public (authenticated + dev mode)
  */
-router.delete('/:id', blockIfNotDev, authenticateMW, async (req, res) => {
+router.delete('/', authenticateMW, async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return httpResponses.badRequest(res, 'Missing "id" in query');
+  }
   try {
-    const deleted = await Games.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    const game = await findByID(req.query, 'game');
+    if (!game) {
       return httpResponses.notFound(res, 'Game not found');
     }
+
+    await game.remove();
+
     return httpResponses.ok(res, { message: 'Game entry deleted successfully' });
   } catch (err) {
     return httpResponses.internalError(res, 'Error deleting game', err.message);
   }
 });
+
 
 /**
  * @route DELETE api/games/dev/wipe
@@ -454,18 +307,21 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
 });
 
 /**
- * @route POST api/games/:gameId/favorites
+ * @route POST api/games/favorites
  * @desc Añade al usuario autenticado a la lista de favoritos de un juego
  * @access Authenticated
  */
-router.post('/:id/favorites', authenticateMW, async (req, res) => {
+router.post('/favorites', authenticateMW, async (req, res) => {
   try {
-    const gameId = req.params.id;
+
+    const { id: gameId } = req.query;
+    if (!gameId) {
+      return httpResponses.badRequest(res, 'Missing "id" in query');
+    }
+
     const loggedUser = req.user;
 
-    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
-
-    const game = await Games.findById(gameId);
+    const game = await findByID({ id: gameId }, 'game');
     if (!game) return httpResponses.notFound(res, 'Game not found');
 
     if (!game.userFav.includes(loggedUser._id)) {
@@ -486,24 +342,30 @@ router.post('/:id/favorites', authenticateMW, async (req, res) => {
  * @desc Elimina al usuario autenticado de los favoritos del juego
  * @access Authenticated
  */
-router.delete('/:id/favorites', authenticateMW, async (req, res) => {
+/**
+ * @route DELETE api/games/favorites
+ * @desc Elimina al usuario autenticado de los favoritos del juego
+ * @access Authenticated
+ */
+router.delete('/favorites', authenticateMW, async (req, res) => {
   try {
-    const gameId = req.params.id;
+    const { id: gameId } = req.query;
+    if (!gameId) {
+      return httpResponses.badRequest(res, 'Missing "id" in query');
+    }
     const loggedUser = req.user;
 
-    if (!loggedUser) return httpResponses.unauthorized(res, 'Not logged in');
-
-    const game = await Games.findById(gameId);
+    const game = await findByID({ id: gameId }, 'game');
     if (!game) return httpResponses.notFound(res, 'Game not found');
 
     const initialCount = game.userFav.length;
-    game.userFav = game.userFav.filter(id => id.toString() !== loggedUser._id);
+    game.userFav = game.userFav.filter(userId => userId.toString() !== loggedUser._id.toString());
 
     if (game.userFav.length === initialCount) {
       return httpResponses.notFound(res, 'User was not in favorites');
     }
-
     await game.save();
+
     return httpResponses.ok(res, {
       message: `User removed from favorites list`,
     });
@@ -511,6 +373,7 @@ router.delete('/:id/favorites', authenticateMW, async (req, res) => {
     return httpResponses.internalError(res, 'Error removing from favorites', err.message);
   }
 });
+
 
 
 

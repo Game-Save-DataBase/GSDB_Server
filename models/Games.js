@@ -16,7 +16,7 @@ const GameSchema = new mongoose.Schema({
     release_date: { type: Date },
     slug: { type: String, required: true, unique: true },
     platformID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
-    savesID: { type: [Number], default: [] },       //todos los ID de los saves subidos para este juego
+    saveID: { type: [Number], default: [] },       //todos los ID de los saves subidos para este juego
     cover: { type: String, default: config.paths.gameCover_default }, //ruta de la imagen caratula  
     IGDB_ID: { type: Number, required: true },
     IGDB_url: { type: String, required: false },
@@ -26,45 +26,13 @@ const GameSchema = new mongoose.Schema({
     userFav: { type: [Number], default: [] },    //usuarios que marcaron el juego como favorito
     saveLocations: [
         {
-            platform: { type: Number, required: true }, //id de nuestras plataformas (las de igdb)
+            platformID: { type: Number, required: true }, //id de nuestras plataformas (las de igdb)
             platformName: { type: String, required: false }, // nombre visible que viene de pcgw
             locations: { type: [String], required: true } //rutas
         }
     ]
 });
 GameSchema.plugin(AutoIncrement, { inc_field: 'gameID', start_seq: 0 });
-
-const filterFields = {
-    _id: 'number', //para mongodb no es un number, tampoco un string, pero en ese caso se va a ingorar. esto es para poder filtrar desde la api usando el comando "id" por algo que sea distinto 
-    title: 'string',
-    platformID: 'array:number', 
-    IGDB_ID: 'number',
-    external: 'boolean',
-    release_date: 'date',
-    slug: 'string'
-};
-
-const linkedFields = {
-    'platform.name': {
-        model: require('./Platforms').Platforms,
-        targetField: 'name',
-        localField: 'platformsID',  // campo en Games que guarda los ID de plataformas
-        foreignKey: 'IGDB_ID'       // campo en Platforms que matchea con platformsID
-    },
-    'platform.slug': {
-        model: require('./Platforms').Platforms,
-        targetField: 'slug',
-        localField: 'platformsID',
-        foreignKey: 'IGDB_ID'
-    },
-    'platform.family': {
-        model: require('./Platforms').Platforms,
-        targetField: 'family',
-        localField: 'platformsID',
-        foreignKey: 'IGDB_ID'
-    }
-};
-
 
 function mapFiltersToIGDB(localFilters) {
     if (!localFilters) return {};
@@ -169,9 +137,5 @@ function processQuery(query) {
     return newQuery;
 }
 
-
-
-
-
 const Games = mongoose.models.Games || mongoose.model('games', GameSchema);
-module.exports = { Games, filterFields, mapFiltersToIGDB, processQuery, linkedFields }
+module.exports = { Games, mapFiltersToIGDB, processQuery }

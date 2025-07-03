@@ -1,13 +1,6 @@
 //funciones para interactuar con peticiones a mongodb
 
-/**
- * Construye un filtro para MongoDB incluyendo filtros relacionales.
- * 
- * @param {Object} query - Parámetros de consulta recibidos (ej. req.query)
- * @param {Object} modelFields - Campos permitidos para filtrar en el modelo principal
- * @returns {Object} Filtro para usar directamente en MongoDB
- */
-const { getModelDefinition } = require('../models/modelRegistry');
+const { getModelDefinition } = require('../models/modelRegistry'); // Asumiendo que este es el archivo con modelRegistry
 
 /**
  * Construye un filtro para MongoDB incluyendo filtros relacionales.
@@ -16,155 +9,242 @@ const { getModelDefinition } = require('../models/modelRegistry');
  * @param {Object} modelFields - Campos permitidos para filtrar en el modelo principal
  * @returns {Object} Filtro para usar directamente en MongoDB
  */
-async function buildMongoFilter(query, modelFields, visitedRelations = []) {
-    const filter = {};
-    if (!query || Object.keys(query).length === 0) return undefined;
+const mongoOpMap = {
+    gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte',
+    eq: '$eq', ne: '$ne', like: '$regex',
+    start: '$regex', end: '$regex', in: '$in', nin: '$nin'
+};
 
-    const mongoOpMap = {
-        gt: '$gt', gte: '$gte', lt: '$lt', lte: '$lte',
-        eq: '$eq', ne: '$ne', like: '$regex',
-        start: '$regex', end: '$regex', in: '$in', nin: '$nin'
-    };
 
-    const allowedKeys = Object.keys(modelFields);
-    const relationalFilters = {};
-    const directFilters = {};
+async function findByQuery(query, modelName) {
+    // Extraer y normalizar paginación
 
-    // Separar filtros directos y relacionales (anidados arbitrarios)
-    for (const key of Object.keys(query)) {
-        if (key.includes('.')) {
-            const [relation, ...rest] = key.split('.');
-            const subfield = rest.join('.');
-            if (!relationalFilters[relation]) relationalFilters[relation] = {};
-            if (relationalFilters[relation][subfield]) {
-                const error = new Error(`Duplicate relational filter: ${relation}.${subfield}`);
-                error.name = 'DuplicateFilterField';
-                throw error;
-            }
-            relationalFilters[relation][subfield] = query[key];
-        } else {
-            if (!allowedKeys.includes(key) && key !== '_id' && key !== 'text') {
-                const error = new Error(`Invalid parameter: ${key}`);
-                error.name = 'InvalidQueryFields';
-                throw error;
-            }
-            if (directFilters[key]) {
-                const error = new Error(`Duplicate direct filter: ${key}`);
-                error.name = 'DuplicateFilterField';
-                throw error;
-            }
-            directFilters[key] = query[key];
-        }
+    const modelDef = getModelDefinition(modelName);
+    if (!modelDef) throw new Error(`Model definition not found for model: ${modelName}`);
+
+    let limit = 50;
+    let offset = 0;
+
+    if (query.limit) {
+        const parsedLimit = parseInt(query.limit);
+        if (!isNaN(parsedLimit) && parsedLimit > 0) limit = parsedLimit;
+        delete query.limit;
     }
+
+    if (query.offset) {
+        const parsedOffset = parseInt(query.offset);
+        if (!isNaN(parsedOffset) && parsedOffset >= 0) offset = parsedOffset;
+        delete query.offset;
+    }
+
+    const filter = await buildMongoFilter(query, modelName);
+
+    if (!filter) return [];
+
+    const results = await modelDef.model.find(filter).skip(offset).limit(limit).lean();
+    return results;
+}
+
+
+/**
+ * 
+ * @param {string} query 
+ * @param {string} modelName 
+ * @returns resultado de buscar de manera rapida dentro del modelo, solamente si tiene en la query un id individual, ya sea de mongodb o del campo del modelo
+ */
+async function findByID(query, modelName) {
+    const modelDef = getModelDefinition(modelName);
+    if (!modelDef) throw new Error(`Model definition not found for ${modelName}`);
+
+    const idField = modelDef.keyField || '_id';  // Campo ID real en la base
+
+    const keys = Object.keys(query);
+    if (keys.length !== 1) return undefined;  // Solo 1 campo permitido
+
+    const key = keys[0];
+    if (key !== '_id' && key !== 'id') return undefined; // Si el único campo no es id, no filtro rápido
+
+    const value = query[key];
+
+    // Solo aceptar valores simples (string o number o ObjectId)
+    const isSimpleValue = val =>
+        typeof val === 'string' || typeof val === 'number' || val instanceof require('mongoose').Types.ObjectId;
+
+    if (!isSimpleValue(value)) return undefined; // Valor no simple, no filtro rápido
+
+    const model = modelDef.model;
+
+    if (key === '_id') {
+        // Buscar por _id
+        const doc = await model.findById(value).lean();
+        return doc || null;
+    } else if (key === 'id') {
+        // Buscar por campo id real
+        const filter = { [idField]: value };
+        const doc = await model.findOne(filter).lean();
+        return doc || null;
+    }
+
+    // No debería llegar aquí
+    return undefined;
+}
+
+
+async function buildMongoFilter(query, modelName, visitedRelations = []) {
+    if (!query || !Object.keys(query).length) return undefined;
+
+    const { filterFields } = getModelDefinition(modelName);
+    const allowedKeys = [...Object.keys(filterFields), '_id', 'text'];
+
+    // Separar filtros directos y relacionales
+    const { directFilters, relationalFilters } = separateFilters(query, allowedKeys);
+
+    // Construir filtro final
+    const filter = {};
 
     // Procesar filtros relacionales recursivamente
-    for (const relation of Object.keys(relationalFilters)) {
-        if (visitedRelations.includes(relation)) {
-            // Evitar ciclos infinitos
-            continue;
-        }
-
-        const relationDef = getModelDefinition(relation);
-        if (!relationDef) {
-            throw new Error(`Model definition for relation '${relation}' not found`);
-        }
-
-        const subQuery = relationalFilters[relation];
-        // Recursividad: filtro para submodelo con acumulación de relaciones visitadas
-        const subFilter = await buildMongoFilter(subQuery, relationDef.filterFields, [...visitedRelations, relation]);
-
-        // Buscar IDs relacionados que cumplen filtro en submodelo
-        const relatedDocs = await relationDef.model.find(subFilter, { _id: 0, IGDB_ID: 1 }).lean();
-        const ids = relatedDocs.map(doc => doc.IGDB_ID);
-
-        const foreignKey = relationDef.foreignKey;
-
-        if (filter[foreignKey]) {
-            const error = new Error(`Duplicate relational filter key: ${foreignKey}`);
-            error.name = 'DuplicateFilterField';
-            throw error;
-        }
-
-        filter[foreignKey] = ids.length > 0 ? { $in: ids } : { $in: [-99999999] };
-    }
+    await processRelationalFilters(filter, relationalFilters, visitedRelations);
 
     // Procesar filtros directos
-    for (const [field, type] of Object.entries(modelFields)) {
-        const value = directFilters[field];
-        if (value === undefined) continue;
+    processDirectFilters(filter, directFilters, filterFields);
 
-        if (filter[field]) {
-            const error = new Error(`Duplicate filter for field: ${field}`);
-            error.name = 'DuplicateFilterField';
-            throw error;
-        }
-
-        const isArray = isArrayType(type);
-
-        if (typeof value === 'object' && !Array.isArray(value)) {
-            // value con operadores { eq: ..., in: ..., etc }
-            filter[field] = {};
-            for (const op in value) {
-                const mongoOp = mongoOpMap[op];
-                if (!mongoOp) continue;
-
-                const val = value[op];
-                const castedVal = castValueByType(val, type);
-
-                if (mongoOp === '$regex') {
-                    if (!type.startsWith('string')) {
-                        throw new Error(`Operator '${op}' only supported for type 'string'`);
-                    }
-                    const normalized = normalizeStr(String(val));
-                    let pattern = normalized;
-                    if (op === 'like') pattern = `.*${escapeRegExp(normalized)}.*`;
-                    else if (op === 'start') pattern = `^${escapeRegExp(normalized)}`;
-                    else if (op === 'end') pattern = `${escapeRegExp(normalized)}$`;
-                    filter[field][mongoOp] = new RegExp(pattern, 'i');
-
-                } else if (isArray) {
-                    if (mongoOp === '$eq') {
-                        // Igualdad exacta: todos y sólo esos elementos (sin importar orden)
-                        const elems = Array.isArray(castedVal) ? castedVal : [castedVal];
-                        filter[field] = {
-                            $all: elems,
-                            $size: elems.length
-                        };
-                    } else if (mongoOp === '$in') {
-                        filter[field] = { $in: Array.isArray(castedVal) ? castedVal : [castedVal] };
-                    } else if (mongoOp === '$nin') {
-                        filter[field] = { $nin: Array.isArray(castedVal) ? castedVal : [castedVal] };
-                    } else if (mongoOp === '$ne') {
-                        // ne como opuesto a eq: no ser exactamente esos elementos
-                        const elems = Array.isArray(castedVal) ? castedVal : [castedVal];
-                        filter.$nor = filter.$nor || [];
-                        filter.$nor.push({ [field]: { $all: elems, $size: elems.length } });
-                    } else {
-                        filter[field] = { $elemMatch: { [mongoOp]: castedVal } };
-                    }
-
-                } else {
-                    // campo no array
-                    filter[field][mongoOp] = castedVal;
-                }
-            }
-        } else {
-            // valor simple sin operador
-            const casted = castValueByType(value, type);
-
-            if (isArray) {
-                // buscamos que el array contenga todos los elementos pasados
-                filter[field] = { $all: Array.isArray(casted) ? casted : [casted] };
-            } else if (type === 'string') {
-                filter[field] = { $regex: new RegExp(`^${escapeRegExp(normalizeStr(value))}$`, 'i') };
-            } else {
-                filter[field] = casted;
-            }
-        }
-    }
+    // Manejar _id especial
+    processIdFilter(filter, directFilters._id);
 
     return filter;
 }
+
+function separateFilters(query, allowedKeys) {
+    const relationalFilters = {};
+    const directFilters = {};
+
+    for (const key in query) {
+        if (key.includes('.')) {
+            const [relation, ...rest] = key.split('.');
+            if (!relationalFilters[relation]) relationalFilters[relation] = {};
+            if (relationalFilters[relation][rest.join('.')])
+                throw new Error(`Duplicate relational filter: ${relation}.${rest.join('.')}`);
+            relationalFilters[relation][rest.join('.')] = query[key];
+        } else {
+            if (!allowedKeys.includes(key)) throw new Error(`Invalid parameter: ${key}`);
+            if (directFilters[key]) throw new Error(`Duplicate direct filter: ${key}`);
+            directFilters[key] = query[key];
+        }
+    }
+    return { directFilters, relationalFilters };
+}
+
+async function processRelationalFilters(filter, relationalFilters, visitedRelations) {
+    for (const relation in relationalFilters) {
+        if (visitedRelations.includes(relation)) continue;
+
+        const relationDef = getModelDefinition(relation);
+        if (!relationDef) throw new Error(`Model definition for relation '${relation}' not found`);
+
+        const subFilter = await buildMongoFilter(relationalFilters[relation], relation, [...visitedRelations, relation]);
+        const keyField = relationDef.foreignKey || '_id';
+
+        const relatedDocs = await relationDef.model.find(subFilter, { [keyField]: 1 }).lean();
+        const ids = relatedDocs.map(d => d[keyField]);
+
+        if (filter[keyField]) throw new Error(`Duplicate relational filter key: ${keyField}`);
+
+        filter[keyField] = ids.length ? { $in: ids } : { $in: [null] };
+    }
+}
+
+function processDirectFilters(filter, directFilters, filterFields) {
+    for (const [field, type] of Object.entries(filterFields)) {
+        if (!(field in directFilters)) continue;
+        if (filter[field]) throw new Error(`Duplicate filter for field: ${field}`);
+
+        filter[field] = parseFilterValue(directFilters[field], type);
+    }
+}
+
+function parseFilterValue(value, type) {
+    const isArray = type.startsWith('array:');
+    const subtype = isArray ? type.split(':')[1] : type;
+
+    if (typeof value === 'object' && !Array.isArray(value)) {
+        const res = {};
+        for (const op in value) {
+            const mongoOp = mongoOpMap[op];
+            if (!mongoOp) continue;
+
+            let v = value[op];
+            if (subtype === 'string' && mongoOp === '$regex') {
+                const norm = normalizeStr(String(v));
+                let pattern = norm;
+                if (op === 'like') pattern = `.*${escapeRegExp(norm)}.*`;
+                else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
+                else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
+                v = new RegExp(pattern, 'i');
+            } else {
+                v = castValueByType(v, subtype);
+            }
+
+            if (isArray && mongoOp === '$eq') {
+                const elems = Array.isArray(v) ? v : [v];
+                return { $all: elems, $size: elems.length };
+            }
+
+            res[mongoOp] = v;
+        }
+        return res;
+    }
+
+    if (isArray) {
+        const arrVal = Array.isArray(value) ? value : String(value).split(/[,;]/).map(s => s.trim());
+        return { $all: castValueByType(arrVal, subtype) };
+    }
+
+    if (subtype === 'string') {
+        return { $regex: new RegExp(`^${escapeRegExp(normalizeStr(value))}$`, 'i') };
+    }
+
+    return castValueByType(value, subtype);
+}
+
+function processIdFilter(filter, idValue) {
+    if (idValue === undefined) return;
+    if (typeof idValue === 'string') {
+        filter._id = idValue;
+    } else if (Array.isArray(idValue)) {
+        filter._id = { $in: idValue };
+    }
+}
+
+// Las auxiliares mantienen su forma
+function castValueByType(value, type) {
+    if (type.startsWith('array:')) {
+        const subtype = type.split(':')[1];
+        if (Array.isArray(value)) return value.map(v => castValueByType(v, subtype));
+        if (typeof value === 'string') return value.split(/[,;]/).map(v => castValueByType(v.trim(), subtype));
+        return [castValueByType(value, subtype)];
+    }
+    switch (type) {
+        case 'string': return String(value);
+        case 'number': return Number(value);
+        case 'boolean': return value === 'true' || value === true;
+        case 'date': return new Date(value);
+        default: return value;
+    }
+}
+function escapeRegExp(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+function normalizeStr(str) { return str.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 async function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
@@ -295,118 +375,6 @@ async function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
 
 
 /**
- * Filtra un array de objetos en memoria según la query y los campos permitidos.
- * 
- * @param {Array<Object>} dataArray - Array de objetos a filtrar
- * @param {Object} query - Parámetros de filtrado (ejemplo req.query)
- * @param {Object} modelFields - Campos permitidos con tipo (ejemplo { title: 'string', external: 'boolean' })
- * @returns {Array<Object>} - Array filtrado
- */
-function filterData(dataArray, query, modelFields) {
-    if (!query || Object.keys(query).length === 0) return dataArray;
-
-    // Validar campos inválidos
-    const allowedKeys = Object.keys(modelFields);
-    const invalidKeys = Object.keys(query).filter(k => !allowedKeys.includes(k));
-    if (invalidKeys.length > 0) {
-        const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);
-        error.name = 'InvalidQueryFields';
-        throw error;
-    }
-
-    // Funciones para evaluar operadores
-    const operators = {
-        gt: (a, b) => a > b,
-        gte: (a, b) => a >= b,
-        lt: (a, b) => a < b,
-        lte: (a, b) => a <= b,
-        eq: (a, b) => a === b,
-        ne: (a, b) => a !== b,
-        like: (a, b) => typeof a === 'string' && new RegExp(escapeRegExp(b), 'i').test(normalizeStr(a)),
-        start: (a, b) => typeof a === 'string' && normalizeStr(a).startsWith(normalizeStr(b)),
-        end: (a, b) => typeof a === 'string' && normalizeStr(a).endsWith(normalizeStr(b)),
-    };
-
-    return dataArray.filter(item => {
-        for (const [field, type] of Object.entries(modelFields)) {
-            const queryVal = query[field];
-            if (queryVal === undefined) continue;
-
-            const itemVal = item[field];
-
-            if (typeof queryVal === 'object' && !Array.isArray(queryVal)) {
-                // Operadores múltiples
-                for (const op in queryVal) {
-                    const opFunc = operators[op];
-                    if (!opFunc) continue;
-
-                    let castedQueryVal;
-                    try {
-                        castedQueryVal = castValueByType(queryVal[op], type);
-                    } catch (err) {
-                        const error = new Error(`Field '${field}' operator '${op}': ${err.message}`);
-                        error.name = 'InvalidQueryFields';
-                        throw error;
-                    }
-
-                    if (!opFunc(itemVal, castedQueryVal)) return false;
-                }
-            } else {
-                // Igualdad simple
-                let castedQueryVal;
-                try {
-                    castedQueryVal = castValueByType(queryVal, type);
-                } catch (err) {
-                    const error = new Error(`Field '${field}': ${err.message}`);
-                    error.name = 'InvalidQueryFields';
-                    throw error;
-                }
-                if (type === 'string') {
-                    if (normalizeStr(String(itemVal)) !== normalizeStr(String(castedQueryVal))) return false;
-                } else {
-                    if (itemVal !== castedQueryVal) return false;
-                }
-
-            }
-        }
-        return true;
-    });
-}
-
-
-function isArrayType(type) {
-    return type.startsWith('array:');
-}
-
-function getArrayElementType(type) {
-    return type.split(':')[1];
-}
-
-function castValueByType(value, type) {
-    if (isArrayType(type)) {
-        const subtype = getArrayElementType(type);
-        if (Array.isArray(value)) {
-            return value.map(v => castValueByType(v, subtype));
-        }
-        if (typeof value === 'string') {
-            return value.split(/[,;]/).map(v => castValueByType(v.trim(), subtype));
-        }
-        return [castValueByType(value, subtype)];
-    }
-
-    switch (type) {
-        case 'string': return String(value);
-        case 'number': return Number(value);
-        case 'boolean': return value === 'true' || value === true;
-        case 'date': return new Date(value);
-        default: return value;
-    }
-}
-
-function escapeRegExp(string) {
-    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-/**
  * Formatea un valor según su tipo para usarlo en una query de IGDB.
  * - Strings se devuelven entre comillas dobles.
  * - Números y booleanos se devuelven como string sin comillas.
@@ -441,10 +409,7 @@ function formatValueForIGDB(value, type) {
 }
 
 
-function normalizeStr(str) {
-    return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-}
 
 
 
-module.exports = { buildMongoFilter, buildIGDBFilter, filterData };
+module.exports = { findByID, findByQuery, buildIGDBFilter };

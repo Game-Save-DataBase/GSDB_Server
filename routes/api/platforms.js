@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/queryUtils');
-const { Platforms, filterFields } = require('../../models/Platforms');
+const { findByID, findByQuery } = require('../../utils/queryUtils');
+const { hasStaticFields } = require('../../models/modelRegistry');
+const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices');
 
@@ -65,7 +66,6 @@ async function syncPlatformsFromIGDB() {
   }
 }
 
-
 /**
  * @route GET api/platforms/test
  * @desc testing, ping
@@ -82,20 +82,22 @@ router.get('/', async (req, res) => {
   try {
     const query = req.query;
 
-    if (query._id) {
-      const platform = await Platforms.findById(query._id);
-      if (!platform) return httpResponses.notFound(res, `platform with id ${query._id} not found`);
-      return httpResponses.ok(res, platform);
+    // Intentar obtener por id rápidamente
+    const fastResult = await findByID(query, 'platform');
+    if (fastResult !== undefined) {
+      if (!fastResult) {
+        return httpResponses.noContent(res, 'No coincidences');
+      }
+      return httpResponses.ok(res, fastResult);
     }
 
-    const filter = await buildMongoFilter(query, filterFields);
-    const platforms_response = await Platforms.find(filter);
-
-    if (platforms_response.length === 0) {
+    // Buscar por query si no hay id o no se encontró por id
+    const results = await findByQuery(query, 'platform');
+    if (results.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
+    return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 
-    return httpResponses.ok(res, platforms_response.length === 1 ? platforms_response[0] : platforms_response);
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
@@ -109,7 +111,7 @@ router.get('/', async (req, res) => {
  * @desc Sync platforms from IGDB into local database
  * @access dev only
  */
-router.post('/refresh-igdb', async (req, res) => {
+router.post('/refresh-igdb', blockIfNotDev, async (req, res) => {
   try {
     const result = await syncPlatformsFromIGDB();
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
@@ -117,85 +119,7 @@ router.post('/refresh-igdb', async (req, res) => {
     return httpResponses.internalError(res, 'Error syncing platforms from IGDB', err.message || err);
   }
 });
-/**
- * @route POST api/platforms/by-id
- * @desc get platforms matching by ids
- * @access public
- */
-router.post('/by-id', async (req, res) => {
-  try {
-    let ids = req.body.ids || [];
-    if (!Array.isArray(ids)) ids = [ids];
-    ids = ids.filter(Boolean);
 
-    if (ids.length === 0) {
-      return httpResponses.ok(res, []);
-    }
-
-    const query = req.query;
-    let mongoFilter = { IGDB_ID: { $in: ids } };
-
-    if (Object.keys(query).length > 0) {
-      const additionalFilter = await buildMongoFilter(query, filterFields);
-      if (additionalFilter) mongoFilter = { ...mongoFilter, ...additionalFilter };
-    }
-
-    const platforms_response = await Platforms.find(mongoFilter);
-    if (platforms_response.length === 0) return httpResponses.noContent(res, 'No coincidences');
-
-    return httpResponses.ok(res, platforms_response.length === 1 ? platforms_response[0] : platforms_response);
-  } catch (error) {
-    return httpResponses.internalError(res, 'Error fetching platforms by ids', error.message);
-  }
-});
-
-/**
- * @route POST api/platforms/
- * @desc Create platform
- * @access auth
- */
-router.post('/', blockIfNotDev, async (req, res) => {
-  try {
-    const platform = await Platforms.create(req.body);
-    return httpResponses.created(res, 'platform added successfully', platform);
-  } catch (err) {
-    return httpResponses.badRequest(res, 'Unable to add this platform', err.message);
-  }
-});
-
-/**
- * @route PUT api/platforms/:id
- * @desc Update platform by id
- * @access auth
- */
-router.put('/:id', blockIfNotDev, async (req, res) => {
-  try {
-    const updated = await Platforms.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updated) {
-      return httpResponses.notFound(res, 'platform not found');
-    }
-    return httpResponses.ok(res, { message: 'Updated successfully', platform: updated });
-  } catch (err) {
-    return httpResponses.badRequest(res, 'Unable to update the platform', err.message);
-  }
-});
-
-/**
- * @route DELETE api/platforms/:id
- * @desc Delete platform by id
- * @access auth
- */
-router.delete('/:id', blockIfNotDev, async (req, res) => {
-  try {
-    const deleted = await Platforms.findByIdAndDelete(req.params.id);
-    if (!deleted) {
-      return httpResponses.notFound(res, 'platform not found');
-    }
-    return httpResponses.ok(res, { message: 'platform entry deleted successfully' });
-  } catch (err) {
-    return httpResponses.internalError(res, 'Error deleting platform', err.message);
-  }
-});
 
 /**
  * @route DELETE api/platforms/dev/wipe

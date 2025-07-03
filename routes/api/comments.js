@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/queryUtils');
-const { Comments, filterFields } = require('../../models/Comments');
+const { findByID, findByQuery } = require('../../utils/queryUtils');
+const { Comments } = require('../../models/Comments');
+const { hasStaticFields } = require('../../models/modelRegistry');
 const httpResponses = require('../../utils/httpResponses');
-
 /**
  * @route GET api/comments/test
  * @desc testing, ping
@@ -13,30 +13,30 @@ const httpResponses = require('../../utils/httpResponses');
  */
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'comment route testing!'));
 
+
 /**
  * @route GET api/comments
- * @desc get comments matching query filters (supports mongodb operands)
+ * @desc get and filter by query
  * @access public
  */
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
+    const fastResult = await findByID(query, 'comment');
 
-    if (query._id) {
-      const comment = await Comments.findById(query._id);
-      if (!comment) return httpResponses.notFound(res, `Comment with id ${query._id} not found`);
-      return httpResponses.ok(res, comment);
+    if (fastResult !== undefined) {
+      if (!fastResult) {
+        return httpResponses.noContent(res, 'No coincidences');
+      }
+      return httpResponses.ok(res, fastResult);
     }
 
-    const filter = await buildMongoFilter(query, filterFields);
-    const comments_response = await Comments.find(filter);
+    const results = await findByQuery(query, 'comment');
+    if (results.length === 0) return httpResponses.noContent(res, 'No coincidences');
+    return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 
-    if (comments_response.length === 0) {
-      return httpResponses.noContent(res, 'No coincidences');
-    }
-
-    return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
-  } catch (error) {
+  }
+  catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
     }
@@ -44,37 +44,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-/**
- * @route POST api/comments/by-id
- * @desc get comments matching by ids
- * @access public
- */
-router.post('/by-id', async (req, res) => {
-  try {
-    let ids = req.body.ids || [];
-    if (!Array.isArray(ids)) ids = [ids];
-    ids = ids.filter(Boolean);
-
-    if (ids.length === 0) {
-      return httpResponses.ok(res, []);
-    }
-
-    const query = req.query;
-    let mongoFilter = { _id: { $in: ids } };
-
-    if (Object.keys(query).length > 0) {
-      const additionalFilter = await buildMongoFilter(query, filterFields);
-      if (additionalFilter) mongoFilter = { ...mongoFilter, ...additionalFilter };
-    }
-
-    const comments_response = await Comments.find(mongoFilter);
-    if (comments_response.length === 0) return httpResponses.noContent(res, 'No coincidences');
-
-    return httpResponses.ok(res, comments_response.length === 1 ? comments_response[0] : comments_response);
-  } catch (error) {
-    return httpResponses.internalError(res, 'Error fetching comments by ids', error.message);
-  }
-});
 
 /**
  * @route POST api/comments/
@@ -91,16 +60,26 @@ router.post('/', authenticateMW, async (req, res) => {
 });
 
 /**
- * @route PUT api/comments/:id
+ * @route PUT api/comments/
  * @desc Update comment by id
  * @access auth
  */
-router.put('/:id', authenticateMW, async (req, res) => {
+router.put('/', authenticateMW, async (req, res) => {
+  const { id } = req.query;
+
+  if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
+  if (hasStaticFields(req.body)) {
+    return httpResponses.badRequest(res, 'Body contains invalid or non existent fields to update');
+  }
+
   try {
-    const updated = await Comments.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    if (!updated) {
-      return httpResponses.notFound(res, 'Comment not found');
-    }
+    // Pasamos la query completa para que findByID la analice
+    const updated = await findByID(req.query, 'comment');
+    if (!updated) return httpResponses.notFound(res, 'Comment not found');
+
+    Object.assign(updated, req.body);
+    await updated.save();
+
     return httpResponses.ok(res, { message: 'Updated successfully', comment: updated });
   } catch (err) {
     return httpResponses.badRequest(res, 'Unable to update the comment', err.message);
@@ -108,21 +87,30 @@ router.put('/:id', authenticateMW, async (req, res) => {
 });
 
 /**
- * @route DELETE api/comments/:id
+ * @route DELETE api/comments/
  * @desc Delete comment by id
  * @access auth
  */
-router.delete('/:id', authenticateMW, async (req, res) => {
+router.delete('/', authenticateMW, async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return httpResponses.badRequest(res, 'Missing "id" in query');
+  }
   try {
-    const deleted = await Comments.findByIdAndDelete(req.params.id);
-    if (!deleted) {
+    // Pasamos la query completa para que findByID la analice
+    const comment = await findByID(req.query, 'comment');
+    if (!comment) {
       return httpResponses.notFound(res, 'Comment not found');
     }
+
+    await comment.remove();
+
     return httpResponses.ok(res, { message: 'Comment entry deleted successfully' });
   } catch (err) {
     return httpResponses.internalError(res, 'Error deleting comment', err.message);
   }
 });
+
 
 /**
  * @route DELETE api/comments/dev/wipe

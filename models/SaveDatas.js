@@ -22,21 +22,6 @@ const SavesSchema = new mongoose.Schema({
 });
 SavesSchema.plugin(AutoIncrement, { inc_field: 'saveID', start_seq: 0 });
 
-/**
- * campos del modelo por los cuales se podra filtrar y su tipo en una cadena
- */
-const filterFields = {
-    userID: 'string',
-    gameID: 'string',
-    platformID: 'number',
-    private: 'boolean',
-    title: 'string',
-    description: 'string',
-    postedDate: 'date',
-    nDownloads: 'number',
-    rating: 'number'
-};
-
 const SaveDatas =  mongoose.models.SaveDatas || mongoose.model('savedatas', SavesSchema);
 
-module.exports = { SaveDatas, filterFields };
+module.exports = { SaveDatas };

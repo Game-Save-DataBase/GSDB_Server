@@ -21,7 +21,11 @@ const screenshotStorage = multer.diskStorage({
 // Savefiles
 const saveFileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../' + config.paths.uploads);
+    const userId = req.user?.id?.toString();
+    if (!userId) {
+      return cb(new Error('User ID not found in request'));
+    }
+    const uploadPath = path.join(__dirname, '../', config.paths.uploads, userId);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
@@ -32,36 +36,56 @@ const saveFileStorage = multer.diskStorage({
   }
 });
 
+
 // User profile/banner images
 const userImageStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const userId = req.params.userId;
-    const uploadPath = path.join(__dirname, '../',config.paths.userProfiles,userId);
+    // Obtenemos userId desde req.user
+    const userId = req.user?.id;
+    if (!userId) return cb(new Error('User not authenticated'));
 
+    const uploadPath = path.join(__dirname, '../', config.paths.userProfiles, userId.toString());
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
-
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    const type = req.params.type === 'banner' ? 'banner' : 'pfp';
+    // Comprobar type aquí mismo para filename
+    const type = req.query.type;
+    if (!type || !['pfp', 'banner'].includes(type)) {
+      return cb(new Error('Invalid or missing type query parameter. Type must be: pfp,banner'));
+    }
     cb(null, `${type}${ext}`);
   }
 });
 
+const fileFilterUserImage = (req, file, cb) => {
+  // Validar type otra vez para más seguridad o para mostrar error antes
+  const type = req.query.type;
+  if (!type || !['pfp', 'banner'].includes(type)) {
+    return cb(new Error('Invalid or missing type query parameter. Type must be: pfp,banner'));
+  }
+
+  // Validar tipo archivo
+  const allowedTypes = /jpeg|jpg|png|gif/;
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!allowedTypes.test(ext)) {
+    return cb(new Error('Only image files are allowed'));
+  }
+
+  cb(null, true);
+};
+
+
 const uploadScreenshot = multer({ storage: screenshotStorage });
-const uploadSaveFile = multer({ storage: saveFileStorage });
-const uploadUserImage = multer({
-  storage: userImageStorage,
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = /jpeg|jpg|png|gif/;
-    const ext = path.extname(file.originalname).toLowerCase();
-    allowedTypes.test(ext) ? cb(null, true) : cb(new Error('Only image files are allowed'));
-  },
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB
+const uploadSaveFile = multer({
+  storage: saveFileStorage,
+  fileFilterUserImage,
+  limits: { fileSize: 5 * 1024 * 1024 }
 });
+const uploadUserImage = multer({ storage: userImageStorage });
 
 module.exports = {
   uploadScreenshot,

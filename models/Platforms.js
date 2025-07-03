@@ -20,17 +20,7 @@ const PlatformSchema = new mongoose.Schema({
     IGDB_ID: {type: Number, required:true}//id de igdb
 });
 PlatformSchema.plugin(AutoIncrement, { inc_field: 'platformID', start_seq: 0 });
-
-const filterFields = {
-    abbreviation: 'string',
-    generation: 'number',    
-    name: 'string', 
-    family:'string',
-    slug: 'string',      
-    family: 'string',
-    IGDB_ID: 'number'
-};
 //IDS UTILES: 6 - windows pc, 14 - mac, 3 - linux, 13 - DOS
 
 const Platforms = mongoose.models.Platforms || mongoose.model('Platforms', PlatformSchema);
-module.exports = {Platforms,filterFields}
+module.exports = {Platforms}

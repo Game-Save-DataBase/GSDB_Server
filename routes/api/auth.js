@@ -6,10 +6,10 @@ const httpResponses = require('../../utils/httpResponses');
 
 const router = express.Router();
 
-// Registro de usuario
+// User registration
 router.post('/register', async (req, res) => {
   if (req.isAuthenticated()) {
-    return httpResponses.badRequest(res, 'Ya estás autenticado, cierra sesión');
+    return httpResponses.badRequest(res, 'Already logged in. Log out to register a new user.');
   }
 
   const { userName, mail, password } = req.body;
@@ -18,20 +18,20 @@ router.post('/register', async (req, res) => {
 
   const mailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!mailRegex.test(cleanMail)) {
-    return httpResponses.badRequest(res, 'Correo electrónico inválido');
+    return httpResponses.badRequest(res, 'Invalid email address.');
   }
 
   const userNameRegex = /^[a-z0-9_]{4,25}$/;
   if (!userNameRegex.test(cleanUserName)) {
     return httpResponses.badRequest(
       res,
-      'El nombre de usuario debe estar en minúsculas, tener entre 4 y 25 caracteres, y contener solo letras, números o guiones bajos'
+      'Username must be lowercase, between 4 and 25 characters, and contain only letters, numbers, or underscores.'
     );
   }
 
   const passwordStrength = zxcvbn(password);
   if (passwordStrength.score < 3) {
-    return httpResponses.badRequest(res, 'La contraseña es demasiado débil.', {
+    return httpResponses.badRequest(res, 'Password is too weak.', {
       warning: passwordStrength.feedback.warning,
       suggestions: passwordStrength.feedback.suggestions,
     });
@@ -42,30 +42,30 @@ router.post('/register', async (req, res) => {
       $or: [{ mail: cleanMail }, { userName: cleanUserName }],
     });
     if (existingUser) {
-      return httpResponses.badRequest(res, 'El usuario o correo electrónico ya están en uso');
+      return httpResponses.badRequest(res, 'Username or email is already in use.');
     }
 
     const user = new User({ userName: cleanUserName, mail: cleanMail, password });
     await user.save();
 
-    return httpResponses.created(res, 'Usuario registrado exitosamente');
+    return httpResponses.created(res, 'User successfully registered.');
   } catch (err) {
     if (err.code === 11000) {
       if (err.message.includes('userName')) {
-        return httpResponses.badRequest(res, 'El nombre de usuario ya está en uso.');
+        return httpResponses.badRequest(res, 'Username is already taken.');
       }
       if (err.message.includes('mail')) {
-        return httpResponses.badRequest(res, 'El correo electrónico ya está en uso.');
+        return httpResponses.badRequest(res, 'Email is already in use.');
       }
     }
-    return httpResponses.internalError(res, 'Error en el servidor', err.message);
+    return httpResponses.internalError(res, 'Server error.', err.message);
   }
 });
 
-// Login de usuario
+// User login
 router.post('/login', (req, res, next) => {
   if (req.isAuthenticated()) {
-    return httpResponses.badRequest(res, 'Ya estás autenticado, cierra sesión para cambiar de usuario.');
+    return httpResponses.badRequest(res, 'Already authenticated. Log out to switch accounts.');
   }
 
   passport.authenticate('local', (err, user, info) => {
@@ -74,31 +74,31 @@ router.post('/login', (req, res, next) => {
 
     req.logIn(user, err => {
       if (err) return next(err);
-      return httpResponses.ok(res, { msg: 'Inicio de sesión exitoso', user });
+      return httpResponses.ok(res, { msg: 'Login successful.', user });
     });
   })(req, res, next);
 });
 
-// Logout de usuario
+// User logout
 router.get('/logout', (req, res) => {
   if (!req.isAuthenticated()) {
-    return httpResponses.unauthorized(res, 'No hay sesión iniciada.');
+    return httpResponses.unauthorized(res, 'No active session.');
   }
   req.logout(err => {
-    if (err) return httpResponses.internalError(res, 'Error al cerrar sesión', err.message);
+    if (err) return httpResponses.internalError(res, 'Logout error.', err.message);
     req.session.destroy(() => {
-      res.clearCookie('connect.sid'); // cookie default express
-      return httpResponses.ok(res, 'Sesión cerrada correctamente');
+      res.clearCookie('connect.sid');
+      return httpResponses.ok(res, 'Session successfully closed.');
     });
   });
 });
 
-// Verificar si el usuario está autenticado
+// Check if user is authenticated
 router.get('/me', (req, res) => {
   if (req.isAuthenticated()) {
     return httpResponses.ok(res, { user: req.user });
   }
-  return httpResponses.unauthorized(res, 'Sesión no iniciada');
+  return httpResponses.unauthorized(res, 'Not authenticated.');
 });
 
 module.exports = router;

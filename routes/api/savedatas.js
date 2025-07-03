@@ -2,217 +2,174 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
-const { buildMongoFilter } = require('../../utils/queryUtils');
-const { uploadScreenshot, uploadSaveFile } = require('../../config/multer');
+const { uploadSaveFile } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { SaveDatas, filterFields } = require('../../models/SaveDatas');
-
+const { SaveDatas } = require('../../models/SaveDatas');
+const { findByID, findByQuery } = require('../../utils/queryUtils');
 const httpResponses = require('../../utils/httpResponses');
+const config = require('../../utils/config')
+const { hasStaticFields } = require('../../models/modelRegistry');
+
 
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'savedata route testing! :)'));
 
+
+/**
+ * @route GET api/savedatas
+ * @desc get savedatas matching query filters (supports mongodb operands)
+ * @access public
+ */
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-    if (query._id) {
-      const savedata = await SaveDatas.findById(query._id);
-      if (!savedata) return httpResponses.notFound(res, `Savedata with id ${query._id} not found`);
-      return httpResponses.ok(res, savedata);
-    }
-        // Parsear y validar limit/offset
-    const limit = Math.min(parseInt(query.limit) || 0, 100);
-    const offset = parseInt(query.offset) || 0;
 
-        // Eliminar del query para que no interfiera en buildMongoFilter
-    delete query.limit;
-    delete query.offset;
-
-    const filter = await buildMongoFilter(query, filterFields);
-    if (query.text) {
-      const searchText = String(query.text);
-      const regex = new RegExp(searchText, 'i');
-
-      filter.$or = [
-        { title: { $regex: regex } },
-        { description: { $regex: regex } }
-      ];
-    }
-
-    let savesQuery = SaveDatas.find(filter).skip(offset);
-    if (limit > 0) savesQuery = savesQuery.limit(limit);
-
-    const savedatas = await savesQuery;
-
-    if (savedatas.length === 0) return httpResponses.noContent(res, 'No coincidences');
-    if (savedatas.length === 1) return httpResponses.ok(res, savedatas[0]);
-    return httpResponses.ok(res, savedatas);
-  } catch (error) {
-    if (error.name === 'InvalidQueryFields') return httpResponses.badRequest(res, error.message);
-    return httpResponses.internalError(res);
-  }
-});
-
-router.get('/:saveId/screenshots', (req, res) => {
-  const saveId = req.params.saveId;
-  const uploadDir = path.join(__dirname, '../../assets/uploads', saveId);
-
-  if (!fs.existsSync(uploadDir)) {
-    return httpResponses.ok(res, { screenshots: [] });
-  }
-
-  fs.readdir(uploadDir, (err, files) => {
-    if (err) {
-      return httpResponses.noContent(res, { screenshots: [] });
-    }
-    const screenshotFiles = files.filter(file => file.startsWith('scr_'));
-    if (screenshotFiles.length === 0) return httpResponses.noContent(res, { screenshots: [] });
-
-    const screenshots = screenshotFiles.map(file => `/assets/uploads/${saveId}/${file}`);
-    return httpResponses.ok(res, { screenshots });
-  });
-});
-
-router.post('/by-id', async (req, res) => {
-  try {
-    const ids = (req.body.ids || []).filter(id => !!id);
-    if (!ids.length) return httpResponses.ok(res, []);
-
-    const query = req.query;
-    let mongoFilter = { _id: { $in: ids } };
-    if (Object.keys(query).length) {
-      const additionalFilter = await buildMongoFilter(query, filterFields);
-      if (additionalFilter) {
-        mongoFilter = { ...mongoFilter, ...additionalFilter };
+    // Buscar por id si viene en la query
+    const fastResult = await findByID(query, 'savedata');
+    if (fastResult !== undefined) {
+      if (!fastResult) {
+        return httpResponses.noContent(res, 'No coincidences');
       }
+      return httpResponses.ok(res, fastResult);
     }
 
-    const saves = await SaveDatas.find(mongoFilter);
-    if (saves.length === 1) return httpResponses.ok(res, saves[0]);
-    return httpResponses.ok(res, saves);
+    // Buscar por query completo
+    const results = await findByQuery(query, 'savedata');
+    if (results.length === 0) {
+      return httpResponses.noContent(res, 'No coincidences');
+    }
+    return httpResponses.ok(res, results.length === 1 ? results[0] : results);
+
   } catch (error) {
+    if (error.name === 'InvalidQueryFields') {
+      return httpResponses.badRequest(res, error.message);
+    }
     return httpResponses.internalError(res);
   }
 });
 
-router.post('/', uploadSaveFile.single('file'), authenticateMW, async (req, res) => {
+
+router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res) => {
   try {
     if (!req.file) return httpResponses.badRequest(res, 'No file uploaded');
 
-    const newSavedata = new SaveDatas({
-      title: req.body.title,
-      gameID: req.body.gameID,
-      platformID: req.body.platformID,
-      description: req.body.description,
-      userID: req.body.userID,
-      file: '',
+    // Agregamos el file y userID directo al body para crear el documento con create()
+    const newData = {
+      ...req.body,
+      userID: req.user.id,
+      file: `${req.file.filename}`,
       tags: Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags]
-    });
 
-    const savedata = await newSavedata.save();
+    };
 
-    const saveFolder = path.join(__dirname, '../../assets/uploads', savedata._id.toString());
-    if (!fs.existsSync(saveFolder)) fs.mkdirSync(saveFolder, { recursive: true });
-
-    const originalPath = req.file.path;
-    const newFilePath = path.join(saveFolder, req.file.filename);
-
-    fs.renameSync(originalPath, newFilePath);
-
-    savedata.file = `/assets/uploads/${savedata._id}/${req.file.filename}`;
-    await savedata.save();
+    const savedata = await SaveDatas.create(newData);
 
     return httpResponses.created(res, savedata);
   } catch (err) {
     console.error("Error saving savedata:", err);
+    // Intentar borrar el archivo subido si existió
+    if (req.file && req.file.path) {
+      try {
+        fs.unlink(req.file.path);
+      } catch (unlinkErr) {
+        console.error("Error deleting uploaded file after save failure:", unlinkErr);
+      }
+    }
     return httpResponses.badRequest(res, 'Unable to save data');
   }
 });
 
-router.put('/:id', authenticateMW, async (req, res) => {
+
+router.put('/', authenticateMW, async (req, res) => {
   try {
-    const savedata = await SaveDatas.findByIdAndUpdate(req.params.id, req.body);
+    const { id } = req.query;
+    if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
+
+    if (hasStaticFields(req.body)) {
+      return httpResponses.badRequest(res, 'Body contains invalid or non existent fields to update');
+    }
+
+    const savedata = await findByID({ id }, 'savedata');
     if (!savedata) return httpResponses.notFound(res, 'Savedata not found');
+
+    Object.assign(savedata, req.body);
+    await savedata.save();
+
     return httpResponses.ok(res, { msg: 'Updated successfully' });
   } catch (err) {
     return httpResponses.badRequest(res, 'Unable to update the Database');
   }
 });
 
-
-
-router.get('/:id/download', authenticateMW, async (req, res) => {
+const uploadsRoot = path.join(__dirname, '..', '..', config.paths.uploads);
+router.get('/download', authenticateMW, async (req, res) => {
   try {
-    const saveData = await SaveDatas.findById(req.params.id);
+    const { id } = req.query;
+    if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
+
+    const saveData = await findByID({ id }, 'savedata');
     if (!saveData || !saveData.file) return httpResponses.notFound(res, 'Savedata not found');
 
-    const filePath = path.join(__dirname, '../../assets/uploads', saveData._id.toString(), path.basename(saveData.file));
-    
+    const filePath = path.join(uploadsRoot, saveData.id.toString(), path.basename(saveData.file));
+
     if (!fs.existsSync(filePath)) return httpResponses.notFound(res, 'File not found');
 
     saveData.nDownloads = (saveData.nDownloads || 0) + 1;
     await saveData.save();
 
     return res.download(filePath, path.basename(saveData.file));
-    
   } catch (err) {
     console.error("Error while downloading:", err);
     return httpResponses.internalError(res, 'Error processing download');
   }
 });
 
-router.post('/:saveId/screenshots', uploadScreenshot.single('image'), authenticateMW, (req, res) => {
-  if (!req.file) return httpResponses.badRequest(res, 'No file uploaded');
 
-  return httpResponses.created(res, {
-    message: 'File uploaded successfully',
-    filePath: `/assets/uploads/${req.params.saveId}/${req.file.filename}`
-  });
-});
-
-
-// DELETE /:id eliminar usuario
-router.delete('/:id', authenticateMW, async (req, res) => {
+router.delete('/', authenticateMW, async (req, res) => {
   try {
-    const deleted = await SaveDatas.findByIdAndDelete(req.params.id);
-    if (!deleted) return httpResponses.notFound(res, 'User not found');
+    const { id } = req.query;
+    if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
 
-    const userFolderPath = path.join(__dirname, '..', '..', 'uploads', req.params.id);
+    // Buscar usuario a borrar con findByID
+    const deleted = await findByID({ id }, 'savedata');
+    if (!deleted) return httpResponses.notFound(res, 'Savedata not found');
+
+    await deleted.remove();
+
+    const saveFolderPath = path.join(uploadsRoot, deleted.id.toString());
     try {
-      await fs.rm(userFolderPath, { recursive: true, force: true });
+      await fs.rm(saveFolderPath, { recursive: true, force: true });
     } catch (fsErr) {
-      console.error(`Error deleting folder for user ${req.params.id}:`, fsErr);
+      console.error(`Error deleting folder for savedata ${deleted.id}:`, fsErr);
     }
 
-    return httpResponses.ok(res, { message: 'User deleted successfully' });
+    return httpResponses.ok(res, { message: 'Save data deleted successfully' });
   } catch (err) {
-    return httpResponses.internalError(res, 'Error deleting user');
+    console.error('Error deleting savedata:', err);
+    return httpResponses.internalError(res, 'Error deleting save data');
   }
 });
 
-
-// DELETE /dev/wipe borrar todos usuarios
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
-    const resultado = await SaveDatas.deleteMany({});
+    const result = await SaveDatas.deleteMany({});
 
-    const savesPath = path.join(__dirname, '..', '..', 'assets', 'uploads');
     try {
-      const folders = await fs.readdir(savesPath, { withFileTypes: true });
-      const folderDeletions = folders
+      const folders = await fs.readdir(uploadsRoot, { withFileTypes: true });
+      const deletions = folders
         .filter(dirent => dirent.isDirectory())
-        .map(dirent => fs.rm(path.join(savesPath, dirent.name), { recursive: true, force: true }));
-      await Promise.all(folderDeletions);
+        .map(dirent => fs.rm(path.join(uploadsRoot, dirent.name), { recursive: true, force: true }));
+
+      await Promise.all(deletions);
     } catch (fsErr) {
       console.error('Error deleting saves folders:', fsErr);
     }
 
-    return httpResponses.ok(res, { deletedCount: resultado.deletedCount });
+    return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
+    console.error('Error wiping saves:', err);
     return httpResponses.internalError(res, 'Error wiping saves');
   }
 });
-
-
 
 module.exports = router;

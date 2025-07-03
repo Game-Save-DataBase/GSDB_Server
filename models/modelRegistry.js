@@ -12,28 +12,90 @@
 const modelRegistry = {
     platform: {
         model: require('./Platforms').Platforms,
-        filterFields: require('./Platforms').filterFields,
         foreignKey: 'platformID',
+        filterFields: {
+            platformID: 'number',
+            abbreviation: 'string',
+            generation: 'number',
+            name: 'string',
+            slug: 'string',
+            family: 'string',
+            IGDB_ID: 'number'
+        },
     },
     savedata: {
         model: require('./SaveDatas').SaveDatas,
-        filterFields: require('./SaveDatas').filterFields,
         foreignKey: 'saveID',
+        putFields: ['title', 'description', 'private'],
+        filterFields: {
+            userID: 'number',
+            gameID: 'number',
+            platformID: 'number',
+            private: 'boolean',
+            title: 'string',
+            description: 'string',
+            postedDate: 'date',
+            nDownloads: 'number',
+            rating: 'number'
+        },
     },
     user: {
         model: require('./Users').Users,
         filterFields: require('./Users').filterFields,
-        foreignKey: 'userID',
+        putFields: ['alias', 'mail', 'password', 'bio'],
+        filterFields: {
+            userID: 'number',
+            userName: 'string',
+            alias: 'string',
+            admin: 'boolean',
+            verified: 'boolean',
+            rating: 'number',
+            favGames: 'array:number',
+            favSaves: 'array:number',
+            followers: 'array:number',
+            following: 'array:number',
+            uploads: 'array:number'
+        },
     },
     game: {
         model: require('./Games').Games,
-        filterFields: require('./Games').filterFields,
         foreignKey: 'gameID',
+        filterFields :{
+            gameID: 'number',
+            title: 'string',
+            slug: 'string',
+            platformID: 'array:number',
+            saveID: 'array:number',
+            IGDB_ID: 'number',
+            external: 'boolean',
+            release_date: 'date',
+            userFav: 'array:number'
+        },
+        
     },
     comment: {
         model: require('./Comments').Comments,
-        filterFields: require('./Comments').filterFields,
         foreignKey: 'commentID',
+        putFields: ['text', 'hide', 'reported'],
+        filterFields: {
+            commentID: 'number',
+            userID: 'number',
+            saveID: 'number',
+            text: 'string',
+            postedDate: 'date',
+            previousComment: 'number',
+            hide: 'boolean',
+            reported: 'boolean',
+            reportReasons: 'array:string'
+        },
+    },
+    tag: {
+        model: require('./Tags').Tags,
+        foreignKey: 'tagID',
+        putFields: ['name', 'description'],
+        filterFields: {
+            name: 'string',
+        },
     },
 };
 
@@ -50,7 +112,14 @@ function getModelDefinition(modelName) {
     return def;
 }
 
+//devuelve true si una query es invalida para usar en los put
+function hasStaticFields(query, modelName) {
+    return Object.keys(query).some(key => !getModelDefinition(modelName).putFields.includes(key));
+}
+
+
 module.exports = {
     modelRegistry,
     getModelDefinition,
+    hasStaticFields,
 };

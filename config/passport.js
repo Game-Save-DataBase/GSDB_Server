@@ -7,14 +7,12 @@ passport.use(
     new LocalStrategy({ usernameField: 'identifier' }, async (identifier, password, done) => {
         try {
             //buscamos en bbdd un usuario que coincida con mail. como en el modelo, mail es "unique", solo puede haber uno
-            const user = await User.findOne({
-                $or: [{ mail: identifier.toLowerCase() }, { userName: identifier.toLowerCase() }]
-            });
+            const user = await User.findByIdentifier(identifier);
 
-            if (!user) return done(null, false, { message: 'Usuario no encontrado' });
+            if (!user) return done(null, false, { message: 'User not found' });
             //desencriptamos
             const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) return done(null, false, { message: 'Contraseña incorrecta' });
+            if (!isMatch) return done(null, false, { message: 'Incorrect password' });
 
             //devuelve exito
             return done(null, user);
