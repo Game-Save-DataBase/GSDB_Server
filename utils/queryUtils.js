@@ -35,11 +35,19 @@ async function findByQuery(query, modelName) {
         delete query.offset;
     }
 
-    const filter = await buildMongoFilter(query, modelName);
-    const results = await modelDef.model.find(filter).skip(offset).limit(limit).lean();
-    console.log(results.length)
-    return results;
+    try {
+        const filter = await buildMongoFilter(query, modelName);
+        const results = await modelDef.model.find(filter).skip(offset).limit(limit).lean();
+        return results;
+    } catch (err) {
+        throw {
+            status: 400,
+            error: 'FILTER_ERROR',
+            message: err.message || 'Invalid filter'
+        };
+    }
 }
+
 
 
 /**
@@ -58,8 +66,8 @@ async function findByID(query, modelName) {
     if (keys.length !== 1) return undefined;  // Solo 1 campo permitido
     const key = keys[0];
     if (key !== '_id' && key !== 'id') return undefined; // Si el único campo no es id, no filtro rápido
-
     const value = query[key];
+    if (typeof value === 'object') return undefined;
 
     // Solo aceptar valores simples (string o number o ObjectId)
     const isSimpleValue = val =>
@@ -76,7 +84,6 @@ async function findByID(query, modelName) {
     } else if (key === 'id') {
         // Buscar por campo id real
         const filter = { [idField]: value };
-        console.log(filter)
         const doc = await model.findOne(filter).lean();
         return doc || null;
     }
@@ -156,12 +163,10 @@ function processDirectFilters(filter, directFilters, filterFields) {
     for (const [field, type] of Object.entries(filterFields)) {
         if (!(field in directFilters)) continue;
         if (filter[field]) throw new Error(`Duplicate filter for field: ${field}`);
-
-        filter[field] = parseFilterValue(directFilters[field], type);
+        filter[field] = parseFilterValue(directFilters[field], type, field);
     }
 }
-
-function parseFilterValue(value, type) {
+function parseFilterValue(value, type, fieldName = 'unknown') {
     const isArray = type.startsWith('array:');
     const subtype = isArray ? type.split(':')[1] : type;
 
@@ -171,39 +176,48 @@ function parseFilterValue(value, type) {
             const mongoOp = mongoOpMap[op];
             if (!mongoOp) continue;
 
-            let v = value[op];
-            if (subtype === 'string' && mongoOp === '$regex') {
-                const norm = normalizeStr(String(v));
-                let pattern = norm;
-                if (op === 'like') pattern = `.*${escapeRegExp(norm)}.*`;
-                else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
-                else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
-                v = new RegExp(pattern, 'i');
-            } else {
-                v = castValueByType(v, subtype);
-            }
+            try {
+                let v = value[op];
+                if (subtype === 'string' && mongoOp === '$regex') {
+                    const norm = normalizeStr(String(v));
+                    let pattern = norm;
+                    if (op === 'like') pattern = `.*${escapeRegExp(norm)}.*`;
+                    else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
+                    else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
+                    v = new RegExp(pattern, 'i');
+                } else {
+                    v = castValueByType(v, subtype);
+                }
 
-            if (isArray && mongoOp === '$eq') {
-                const elems = Array.isArray(v) ? v : [v];
-                return { $all: elems, $size: elems.length };
-            }
+                if (isArray && mongoOp === '$eq') {
+                    const elems = Array.isArray(v) ? v : [v];
+                    return { $all: elems, $size: elems.length };
+                }
 
-            res[mongoOp] = v;
+                res[mongoOp] = v;
+            } catch (err) {
+                throw new Error(`filter ${fieldName}[${op}]=${value[op]} contains errors`);
+            }
         }
         return res;
     }
 
-    if (isArray) {
-        const arrVal = Array.isArray(value) ? value : String(value).split(/[,;]/).map(s => s.trim());
-        return { $all: castValueByType(arrVal, subtype) };
-    }
+    try {
+        if (isArray) {
+            const arrVal = Array.isArray(value) ? value : String(value).split(/[,;]/).map(s => s.trim());
+            return { $all: castValueByType(arrVal, subtype) };
+        }
 
-    if (subtype === 'string') {
-        return { $regex: new RegExp(`^${escapeRegExp(normalizeStr(value))}$`, 'i') };
-    }
+        if (subtype === 'string') {
+            return { $regex: new RegExp(`^${escapeRegExp(normalizeStr(value))}$`, 'i') };
+        }
 
-    return castValueByType(value, subtype);
+        return castValueByType(value, subtype);
+    } catch (err) {
+        throw new Error(`filter ${fieldName}= ${value} contains errors`);
+    }
 }
+
 
 function processIdFilter(filter, idValue) {
     if (idValue === undefined) return;
@@ -214,22 +228,45 @@ function processIdFilter(filter, idValue) {
     }
 }
 
-// Las auxiliares mantienen su forma
 function castValueByType(value, type) {
     if (type.startsWith('array:')) {
         const subtype = type.split(':')[1];
-        if (Array.isArray(value)) return value.map(v => castValueByType(v, subtype));
-        if (typeof value === 'string') return value.split(/[,;]/).map(v => castValueByType(v.trim(), subtype));
-        return [castValueByType(value, subtype)];
+
+        try {
+            if (Array.isArray(value)) return value.map(v => castValueByType(v, subtype));
+            if (typeof value === 'string') return value.split(/[,;]/).map(v => castValueByType(v.trim(), subtype));
+            return [castValueByType(value, subtype)];
+        } catch (err) {
+            throw err; // dejar que propague
+        }
     }
+
     switch (type) {
         case 'string': return String(value);
-        case 'number': return Number(value);
-        case 'boolean': return value === 'true' || value === true;
-        case 'date': return new Date(value);
-        default: return value;
+        case 'number':
+            const n = Number(value);
+            if (isNaN(n)) {
+                throw new Error(`Cannot cast "${value}" to number`);
+            }
+            return n;
+
+        case 'boolean':
+            if (value === 'true' || value === true) return true;
+            if (value === 'false' || value === false) return false;
+            throw new Error(`Cannot cast "${value}" to boolean`);
+
+        case 'date':
+            const d = new Date(value);
+            if (isNaN(d.getTime())) {
+                throw new Error(`Cannot cast "${value}" to date`);
+            }
+            return d;
+
+        default:
+            return value;
     }
 }
+
 function escapeRegExp(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function normalizeStr(str) { return str.normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
 
