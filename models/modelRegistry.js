@@ -41,7 +41,6 @@ const modelRegistry = {
     },
     user: {
         model: require('./Users').Users,
-        filterFields: require('./Users').filterFields,
         putFields: ['alias', 'mail', 'password', 'bio'],
         filterFields: {
             userID: 'number',

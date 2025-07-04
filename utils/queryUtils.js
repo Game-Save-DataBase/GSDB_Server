@@ -17,8 +17,6 @@ const mongoOpMap = {
 
 
 async function findByQuery(query, modelName) {
-    // Extraer y normalizar paginación
-
     const modelDef = getModelDefinition(modelName);
     if (!modelDef) throw new Error(`Model definition not found for model: ${modelName}`);
 
@@ -38,10 +36,8 @@ async function findByQuery(query, modelName) {
     }
 
     const filter = await buildMongoFilter(query, modelName);
-
-    if (!filter) return [];
-
     const results = await modelDef.model.find(filter).skip(offset).limit(limit).lean();
+    console.log(results.length)
     return results;
 }
 
@@ -56,11 +52,10 @@ async function findByID(query, modelName) {
     const modelDef = getModelDefinition(modelName);
     if (!modelDef) throw new Error(`Model definition not found for ${modelName}`);
 
-    const idField = modelDef.keyField || '_id';  // Campo ID real en la base
+    const idField = modelDef.foreignKey || '_id';  // Campo ID real en la base
 
     const keys = Object.keys(query);
     if (keys.length !== 1) return undefined;  // Solo 1 campo permitido
-
     const key = keys[0];
     if (key !== '_id' && key !== 'id') return undefined; // Si el único campo no es id, no filtro rápido
 
@@ -81,6 +76,7 @@ async function findByID(query, modelName) {
     } else if (key === 'id') {
         // Buscar por campo id real
         const filter = { [idField]: value };
+        console.log(filter)
         const doc = await model.findOne(filter).lean();
         return doc || null;
     }
@@ -89,15 +85,18 @@ async function findByID(query, modelName) {
     return undefined;
 }
 
-
 async function buildMongoFilter(query, modelName, visitedRelations = []) {
-    if (!query || !Object.keys(query).length) return undefined;
+    if (!query || !Object.keys(query).length) return {};  // <-- Aquí el cambio
 
-    const { filterFields } = getModelDefinition(modelName);
-    const allowedKeys = [...Object.keys(filterFields), '_id', 'text'];
+    const { filterFields, foreignKey } = getModelDefinition(modelName);
+    const allowedKeys = [...Object.keys(filterFields), '_id', 'id'];
 
     // Separar filtros directos y relacionales
     const { directFilters, relationalFilters } = separateFilters(query, allowedKeys);
+    if (directFilters.id !== undefined) {
+        directFilters[foreignKey] = directFilters.id;
+        delete directFilters.id;
+    }
 
     // Construir filtro final
     const filter = {};

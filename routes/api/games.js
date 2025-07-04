@@ -32,7 +32,8 @@ router.get('/', async (req, res) => {
     delete query.external;
 
     // Detectamos si external está explícitamente a 'false' (string) -> buscamos solo en mongodb
-    if (!isExternal) {
+    // if (!isExternal) {
+    if(true){
       // Buscar por id si viene en la query
       const fastResult = await findByID(query, 'game');
       if (fastResult !== undefined) {
