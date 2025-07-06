@@ -8,7 +8,6 @@
  * - foreignKey: nombre que tiene el ID de esta tabla en otros modelos
  *              -> es decir, si en savefiles queremos hacer referencia a su juego, debemos usar "gameID". Esa seria la foreignKey del modelo Games
  */
-
 const modelRegistry = {
     platform: {
         model: require('./Platforms').Platforms,
@@ -22,6 +21,7 @@ const modelRegistry = {
             family: 'string',
             IGDB_ID: 'number'
         },
+
     },
     savedata: {
         model: require('./SaveDatas').SaveDatas,
@@ -59,18 +59,24 @@ const modelRegistry = {
     game: {
         model: require('./Games').Games,
         foreignKey: 'gameID',
-        filterFields :{
+        filterFields: {
             gameID: 'number',
             title: 'string',
             slug: 'string',
             platformID: 'array:number',
             saveID: 'array:number',
-            IGDB_ID: 'number',
             external: 'boolean',
             release_date: 'date',
             userFav: 'array:number'
         },
-        
+        igdbFilterFields: {
+            title: 'name',
+            slug: 'slug',
+            gameID: 'id',
+            release_date: 'first_release_date',
+            platformID: 'platforms'
+        },
+        localFields:['saveID', 'userFav'],
     },
     comment: {
         model: require('./Comments').Comments,
@@ -115,10 +121,14 @@ function getModelDefinition(modelName) {
 function hasStaticFields(query, modelName) {
     return Object.keys(query).some(key => !getModelDefinition(modelName).putFields.includes(key));
 }
-
+//devuelve true si una query que contiene valores que solo existen en mongodb, no en bases de datos externas
+function hasLocalFields(query, modelName) {
+    return Object.keys(query).some(key => getModelDefinition(modelName).localFields?.includes(key));
+}
 
 module.exports = {
     modelRegistry,
     getModelDefinition,
     hasStaticFields,
+    hasLocalFields,
 };

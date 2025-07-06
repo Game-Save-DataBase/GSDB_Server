@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/queryUtils');
+const { buildMongoFilter } = require('../../utils/localQueryUtils');
 const { Tags, filterFields, findByFlexibleId } = require('../../models/Tags');
 const httpResponses = require('../../utils/httpResponses');
 

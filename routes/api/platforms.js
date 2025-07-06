@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { findByID, findByQuery } = require('../../utils/queryUtils');
+const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { hasStaticFields } = require('../../models/modelRegistry');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');

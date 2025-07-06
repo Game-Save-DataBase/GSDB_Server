@@ -144,20 +144,30 @@ async function processRelationalFilters(filter, relationalFilters, visitedRelati
     for (const relation in relationalFilters) {
         if (visitedRelations.includes(relation)) continue;
 
+        const subFilter = await buildMongoFilter(relationalFilters[relation], relation, [...visitedRelations, relation]);
+
         const relationDef = getModelDefinition(relation);
         if (!relationDef) throw new Error(`Model definition for relation '${relation}' not found`);
 
-        const subFilter = await buildMongoFilter(relationalFilters[relation], relation, [...visitedRelations, relation]);
         const keyField = relationDef.foreignKey || '_id';
 
-        const relatedDocs = await relationDef.model.find(subFilter, { [keyField]: 1 }).lean();
-        const ids = relatedDocs.map(d => d[keyField]);
+        let ids = [];
+
+        if (relation === 'game') {
+            // Lógica para usar búsqueda externa de juegos
+            const externalGames = await searchGamesFromIGDB(subFilter);
+            ids = externalGames.map(g => g[keyField]).filter(Boolean);
+        } else {
+            const relatedDocs = await relationDef.model.find(subFilter, { [keyField]: 1 }).lean();
+            ids = relatedDocs.map(d => d[keyField]);
+        }
 
         if (filter[keyField]) throw new Error(`Duplicate relational filter key: ${keyField}`);
 
         filter[keyField] = ids.length ? { $in: ids } : { $in: [null] };
     }
 }
+
 
 function processDirectFilters(filter, directFilters, filterFields) {
     for (const [field, type] of Object.entries(filterFields)) {
@@ -272,180 +282,4 @@ function normalizeStr(str) { return str.normalize('NFD').replace(/[\u0300-\u036f
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-async function buildIGDBFilter(rawQuery, modelFields, mapFiltersFn) {
-    if (!rawQuery || Object.keys(rawQuery).length === 0) rawQuery = {};
-
-    const igdbOpMap = {
-        gt: '>',
-        gte: '>=',
-        lt: '<',
-        lte: '<=',
-        eq: '=',
-        ne: '!=',
-        like: '~',
-        start: '~',
-        end: '~',
-        in: '='
-    };
-
-    const stringOnlyOps = ['like', 'start', 'end'];
-    const allowedKeys = Object.keys(modelFields);
-    const invalidKeys = Object.keys(rawQuery).filter(k => !allowedKeys.includes(k));
-    if (invalidKeys.length > 0) {
-        const error = new Error(`Invalid parameters: ${invalidKeys.join(', ')}`);
-        error.name = 'InvalidQueryFields';
-        throw error;
-    }
-
-    // Obtener lista de plataformas válidas
-    const platformIDs = await Platforms.find().distinct('IGDB_ID');
-
-    // --- Detectar si existe platformID/platformsID en el modelo y su campo IGDB ---
-    let platformFieldIGDB = null;
-    for (const key of ['platformID', 'platformsID']) {
-        if (modelFields[key]) {
-            const igdbField = mapFiltersFn({ [key]: 1 });
-            platformFieldIGDB = igdbField ? Object.keys(igdbField)[0] : key;
-            break;
-        }
-    }
-
-    const conditions = [];
-
-    for (const [localField, type] of Object.entries(modelFields)) {
-        const value = rawQuery[localField];
-        if (value === undefined) continue;
-
-        const igdbField = mapFiltersFn({ [localField]: 1 })
-            ? Object.keys(mapFiltersFn({ [localField]: 1 }))[0]
-            : localField;
-
-        const isPlatformField = localField === 'platformID' || localField === 'platformsID';
-
-        if (typeof value === 'object' && !Array.isArray(value)) {
-            for (const [op, valRaw] of Object.entries(value)) {
-                const opSymbol = igdbOpMap[op];
-                if (!opSymbol) continue;
-
-                try {
-                    if (stringOnlyOps.includes(op) && type !== 'string') {
-                        throw new Error(`Operator '${op}' is only supported on type 'string'`);
-                    }
-
-                    if (op === 'in') {
-                        let arrValues;
-                        if (typeof valRaw === 'string') {
-                            arrValues = valRaw.split(/[,;]/).map(v => v.trim()).filter(v => v.length > 0);
-                        } else if (Array.isArray(valRaw)) {
-                            arrValues = valRaw;
-                        } else {
-                            throw new Error(`Invalid value for 'in' operator; expected string or array`);
-                        }
-
-                        const castedValues = arrValues.map(v => formatValueForIGDB(v, type));
-                        if (isPlatformField && platformIDs.length > 0) {
-                            const invalid = castedValues.filter(v => !platformIDs.includes(Number(v)));
-                            if (invalid.length > 0) {
-                                throw new Error(`Invalid platformID(s): ${invalid.join(', ')}`);
-                            }
-                        }
-
-                        conditions.push(`${igdbField} = (${castedValues.join(', ')})`);
-                    } else {
-                        const valFormatted = formatValueForIGDB(valRaw, type);
-                        if (isPlatformField && platformIDs.length > 0 && !platformIDs.includes(Number(valFormatted))) {
-                            throw new Error(`Invalid platformID: ${valFormatted}`);
-                        }
-
-                        if (op === 'like') {
-                            conditions.push(`${igdbField} ${opSymbol} *${valFormatted}*`);
-                        } else if (op === 'start') {
-                            conditions.push(`${igdbField} ${opSymbol} ${valFormatted}*`);
-                        } else if (op === 'end') {
-                            conditions.push(`${igdbField} ${opSymbol} *${valFormatted}`);
-                        } else {
-                            conditions.push(`${igdbField} ${opSymbol} ${valFormatted}`);
-                        }
-                    }
-                } catch (err) {
-                    const error = new Error(`Field '${localField}' operator '${op}': ${err.message}`);
-                    error.name = 'InvalidQueryFields';
-                    throw error;
-                }
-            }
-        } else {
-            try {
-                const valFormatted = formatValueForIGDB(value, type);
-                if (isPlatformField && platformIDs.length > 0 && !platformIDs.includes(Number(valFormatted))) {
-                    throw new Error(`Invalid platformID: ${valFormatted}`);
-                }
-                conditions.push(`${igdbField} = ${valFormatted}`);
-            } catch (err) {
-                const error = new Error(`Field '${localField}': ${err.message}`);
-                error.name = 'InvalidQueryFields';
-                throw error;
-            }
-        }
-    }
-
-    let result = conditions.join(' & ');
-
-    // Si se detectó platformFieldIGDB, pero no hay ningún filtro para él, añadimos todos por defecto
-    if (platformFieldIGDB && !conditions.some(c => c.startsWith(`${platformFieldIGDB} `))) {
-        result += (result ? ' & ' : '') + `${platformFieldIGDB} = (${platformIDs.join(',')})`;
-    }
-
-    return result;
-}
-
-
-/**
- * Formatea un valor según su tipo para usarlo en una query de IGDB.
- * - Strings se devuelven entre comillas dobles.
- * - Números y booleanos se devuelven como string sin comillas.
- * - Fechas se convierten a timestamp UNIX (segundos).
- */
-function formatValueForIGDB(value, type) {
-    switch (type) {
-        case 'number':
-            if (isNaN(Number(value))) {
-                throw new Error(`Invalid number value: '${value}'`);
-            }
-            return String(Number(value));
-
-        case 'boolean':
-            if (value === 'true' || value === true) return '1';
-            if (value === 'false' || value === false) return '0';
-            throw new Error(`Invalid boolean value: '${value}'`);
-
-        case 'date':
-            const date = new Date(value);
-            if (isNaN(date.getTime())) {
-                throw new Error(`Invalid date value: '${value}'`);
-            }
-            return String(Math.floor(date.getTime() / 1000)); // UNIX timestamp en segundos
-
-        case 'string':
-        default:
-            // Escapar comillas dobles por seguridad
-            const safe = String(value).replace(/["\\]/g, '');
-            return `"${safe}"`;
-    }
-}
-
-
-
-
-
-module.exports = { findByID, findByQuery, buildIGDBFilter };
+module.exports = { findByID, findByQuery };
