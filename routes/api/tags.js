@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
-const { buildMongoFilter } = require('../../utils/localQueryUtils');
-const { Tags, filterFields, findByFlexibleId } = require('../../models/Tags');
+const { findByID, findByQuery } = require('../../utils/localQueryUtils');
+const { Tags } = require('../../models/Tags');
 const httpResponses = require('../../utils/httpResponses');
+const { hasStaticFields } = require('../../models/modelRegistry');
+
 
 /**
  * @route GET api/tags/test
@@ -22,22 +23,18 @@ router.get('/', async (req, res) => {
   try {
     const query = req.query;
 
-    if (query.id) {
-      const t = await Tags.findByFlexibleId(query.id);
-      if (!t) {
-        return httpResponses.notFound(res, `Tag with id ${query.id} not found`);
-      }
-      return httpResponses.ok(res, t);
+    // Intentar búsqueda rápida por id
+    const fastResult = await findByID(query, 'tag');
+    if (fastResult !== undefined) {
+      if (!fastResult) return httpResponses.noContent(res, 'Tag not found');
+      return httpResponses.ok(res, fastResult);
     }
 
-    const filter = buildMongoFilter(query, filterFields);
-    const tags_response = await Tags.find(filter);
+    // Si no es búsqueda rápida, hacer búsqueda por query completo
+    const results = await findByQuery(query, 'tag');
+    if (results.length === 0) return httpResponses.noContent(res, 'No coincidences');
+    return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 
-    if (tags_response.length === 0) {
-      return httpResponses.noContent(res, 'No coincidences');
-    }
-
-    return httpResponses.ok(res, tags_response.length === 1 ? tags_response[0] : tags_response);
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
@@ -69,26 +66,28 @@ router.put('/', blockIfNotDev, async (req, res) => {
   const { id } = req.query;
 
   if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
-  delete query.id;
   if (hasStaticFields(req.body)) {
     return httpResponses.badRequest(res, 'Body contains invalid or non existent fields to update');
   }
 
   try {
-    const updated = await Tags.findByFlexibleId(id);
+    // Pasamos la query completa para que findByID la analice
+    const updated = await findByID(req.query, 'tag');
     if (!updated) return httpResponses.notFound(res, 'Tag not found');
+
     Object.assign(updated, req.body);
     await updated.save();
 
-    return httpResponses.ok(res, { message: 'Updated successfully', tag: updated });
+    return httpResponses.ok(res, { message: 'Updated successfully', comment: updated });
   } catch (err) {
-    return httpResponses.badRequest(res, 'Unable to update the tag', err.message);
+    return httpResponses.badRequest(res, 'Unable to update the comment', err.message);
   }
 });
 
+
 /**
- * @route DELETE api/tags/
- * @desc Delete tag by id
+ * @route DELETE api/comments/
+ * @desc Delete comment by id
  * @access auth
  */
 router.delete('/', blockIfNotDev, async (req, res) => {
@@ -97,8 +96,8 @@ router.delete('/', blockIfNotDev, async (req, res) => {
     return httpResponses.badRequest(res, 'Missing "id" in query');
   }
   try {
-    const tag = await Tags.findByFlexibleId(id);
-
+    // Pasamos la query completa para que findByID la analice
+    const tag = await findByID(req.query, 'tag');
     if (!tag) {
       return httpResponses.notFound(res, 'Tag not found');
     }
@@ -110,7 +109,6 @@ router.delete('/', blockIfNotDev, async (req, res) => {
     return httpResponses.internalError(res, 'Error deleting tag', err.message);
   }
 });
-
 
 /**
  * @route DELETE api/tags/dev/wipe
