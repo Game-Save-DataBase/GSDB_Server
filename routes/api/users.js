@@ -202,19 +202,10 @@ router.delete('/', authenticateMW, async (req, res) => {
     const { id } = req.query;
     if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
 
-    // Buscar usuario a borrar con findByID
     const deleted = await findByID({ id }, 'user');
     if (!deleted) return httpResponses.notFound(res, 'User not found');
 
-    await deleted.remove();
-
-    const userPath = path.join(usersRoot, deleted.id.toString());
-
-    try {
-      await fs.rm(userPath, { recursive: true, force: true });
-    } catch (fsErr) {
-      console.error(`Error deleting folder for user ${deleted.id}:`, fsErr);
-    }
+    await deleted.deleteOne(); // Esto ahora también elimina la carpeta
 
     return httpResponses.ok(res, { message: 'User deleted successfully' });
   } catch (err) {
@@ -228,24 +219,12 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const result = await Users.deleteMany({});
 
-    try {
-      const folders = await fs.readdir(usersRoot, { withFileTypes: true });
-      const deletions = folders
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => fs.rm(path.join(usersRoot, dirent.name), { recursive: true, force: true }));
-
-      await Promise.all(deletions);
-    } catch (fsErr) {
-      console.error('Error deleting users folders:', fsErr);
-    }
-
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     console.error('Error wiping users:', err);
     return httpResponses.internalError(res, 'Error wiping users');
   }
 });
-
 
 
 

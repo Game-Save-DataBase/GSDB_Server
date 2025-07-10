@@ -55,6 +55,8 @@ const modelRegistry = {
             following: 'array:number',
             uploads: 'array:number'
         },
+                foreignKey: 'userID',
+
     },
     game: {
         model: require('./Games').Games,

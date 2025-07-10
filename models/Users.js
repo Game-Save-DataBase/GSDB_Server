@@ -5,12 +5,15 @@
  * Contrendra la informacion de cada usuario registrado
  * */
 const config = require('../utils/config');
+const fs = require('fs/promises');
+const path = require('path');
 
 const mongoose = require('mongoose');
 const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 const { encrypt, decrypt } = require('../utils/encrypt.js');
+const userAssetsBasePath = path.join(__dirname, '..', config.paths.userProfiles);
 
 const UserSchema = new mongoose.Schema({
     userName: { type: String, required: true, unique: true },     //nombre del usuario
@@ -118,6 +121,55 @@ UserSchema.pre('save', async function (next) {
 
 });
 
+UserSchema.post('save', async function (doc, next) {
+  const userDir = path.join(userAssetsBasePath, String(doc.userID));
+
+  try {
+    await fs.access(userDir); // Si no lanza error, el directorio ya existe
+  } catch {
+    try {
+      await fs.mkdir(userDir, { recursive: true });
+    } catch (err) {
+      console.error(`Error creating folder for userID ${doc.userID}:`, err);
+    }
+  }
+
+  next();
+});
+
+
+UserSchema.pre('deleteOne', { document: false, query: true }, async function(next) {
+  this._docToDelete = await this.model.findOne(this.getFilter()).lean();
+  next();
+});
+
+UserSchema.post('deleteOne', { document: false, query: true }, async function() {
+  const doc = this._docToDelete;
+  if (!doc) return; 
+
+  const userDir = path.join(userAssetsBasePath, String(doc.userID));
+
+  try {
+    await fs.rm(userDir, { recursive: true, force: true });
+  } catch (err) {
+    console.error(`Error deleting data for userID ${doc.userID}:`, err);
+  }
+});
+
+
+UserSchema.post('deleteMany', async function () {
+  try {
+    const folders = await fs.readdir(userAssetsBasePath, { withFileTypes: true });
+
+    const deletions = folders
+      .filter(dirent => dirent.isDirectory())
+      .map(dirent => fs.rm(path.join(userAssetsBasePath, dirent.name), { recursive: true, force: true }));
+
+    await Promise.all(deletions);
+  } catch (fsErr) {
+    console.error('error wiping user data:', fsErr);
+  }
+});
 
 const Users = mongoose.models.Users || mongoose.model('Users', UserSchema);
 module.exports = { Users };

@@ -79,12 +79,12 @@ async function findByID(query, modelName) {
 
     if (key === '_id') {
         // Buscar por _id
-        const doc = await model.findById(value).lean();
+        const doc = await model.findById(value);
         return doc || null;
     } else if (key === 'id') {
         // Buscar por campo id real
         const filter = { [idField]: value };
-        const doc = await model.findOne(filter).lean();
+        const doc = await model.findOne(filter);
         return doc || null;
     }
 

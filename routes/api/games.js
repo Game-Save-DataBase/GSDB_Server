@@ -102,7 +102,6 @@ router.get('/', async (req, res) => {
       console.log("haciendo query local")
       return await localGameSearch(req, res, query)
     }
-    console.log("haciendo query external")
 
     return await externalGameSearch(req, res, query)
 

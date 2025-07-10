@@ -15,6 +15,7 @@ const routesComments = require("./routes/api/comments");
 const routesUsers = require("./routes/api/users");
 const routesAuth= require("./routes/api/auth");
 const routesTags = require("./routes/api/tags");
+const routesAssets = require("./routes/api/assets");
 
 const { refreshIGDB } = require('./scripts/refreshIGDB');
 
@@ -68,7 +69,7 @@ app.use(config.api.comments, routesComments);
 app.use(config.api.users, routesUsers);
 app.use(config.api.auth, routesAuth);
 app.use(config.api.tags, routesTags);
-
+app.use(config.api.assets, routesAssets);
 app.use(config.paths.assetsFolder, express.static(path.join(__dirname, 'assets')));
 
 // Ruta para comprobar la conexión con la API

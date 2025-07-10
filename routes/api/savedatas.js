@@ -130,18 +130,11 @@ router.delete('/', authenticateMW, async (req, res) => {
     const { id } = req.query;
     if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
 
-    // Buscar usuario a borrar con findByID
+    // Buscar savedata a borrar con findByID
     const deleted = await findByID({ id }, 'savedata');
     if (!deleted) return httpResponses.notFound(res, 'Savedata not found');
 
-    await deleted.remove();
-
-    const saveFolderPath = path.join(uploadsRoot, deleted.id.toString());
-    try {
-      await fs.rm(saveFolderPath, { recursive: true, force: true });
-    } catch (fsErr) {
-      console.error(`Error deleting folder for savedata ${deleted.id}:`, fsErr);
-    }
+    await deleted.deleteOne();
 
     return httpResponses.ok(res, { message: 'Save data deleted successfully' });
   } catch (err) {
@@ -153,18 +146,6 @@ router.delete('/', authenticateMW, async (req, res) => {
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const result = await SaveDatas.deleteMany({});
-
-    try {
-      const folders = await fs.readdir(uploadsRoot, { withFileTypes: true });
-      const deletions = folders
-        .filter(dirent => dirent.isDirectory())
-        .map(dirent => fs.rm(path.join(uploadsRoot, dirent.name), { recursive: true, force: true }));
-
-      await Promise.all(deletions);
-    } catch (fsErr) {
-      console.error('Error deleting saves folders:', fsErr);
-    }
-
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     console.error('Error wiping saves:', err);
