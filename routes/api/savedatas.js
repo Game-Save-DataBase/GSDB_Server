@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const router = express.Router();
+const archiver = require('archiver');
 const { uploadSaveFile } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
@@ -11,6 +12,7 @@ const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config')
 const { hasStaticFields } = require('../../models/modelRegistry');
 
+const axios = require('axios');
 
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'savedata route testing! :)'));
 
@@ -49,33 +51,73 @@ router.get('/', async (req, res) => {
 });
 
 
+
+async function processSaveFileUpload({ file, user, body }) {
+  if (!file) throw new Error('No file uploaded');
+
+  const { gameID, tags } = body;
+  const userID = user.id;
+
+  if (!gameID) throw new Error('Missing gameID');
+
+  const game = await axios.get(`${config.connection}${config.api.games}?id=${gameID}`);
+  if (!game) throw new Error('Game not found');
+
+  // Crear entry temporal en DB para obtener el id (saveID)
+  const tempSaveData = await SaveDatas.create({ userID, gameID });
+  const saveID = tempSaveData.id.toString();
+
+  const finalFileName = `${game.slug}_${saveID}_${user.userName}.zip`;
+  const finalFilePath = path.join(file.destination, finalFileName);
+
+  if (path.extname(file.originalname).toLowerCase() === '.zip') {
+    fs.renameSync(file.path, finalFilePath);
+  } else {
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(finalFilePath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      output.on('close', resolve);
+      archive.on('error', reject);
+
+      archive.pipe(output);
+      archive.file(file.path, { name: file.originalname });
+      archive.finalize();
+    });
+
+    fs.unlinkSync(file.path);
+  }
+
+  tempSaveData.file = finalFileName;
+  tempSaveData.tags = Array.isArray(tags) ? tags : [tags];
+  await tempSaveData.save();
+
+  return tempSaveData;
+}
+
+
 router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res) => {
   try {
-    if (!req.file) return httpResponses.badRequest(res, 'No file uploaded');
-
-    // Agregamos el file y userID directo al body para crear el documento con create()
-    const newData = {
-      ...req.body,
-      userID: req.user.id,
-      file: `${req.file.filename}`,
-      tags: Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags]
-
-    };
-
-    const savedata = await SaveDatas.create(newData);
+    const savedata = await processSaveFileUpload({
+      file: req.file,
+      user: req.user,
+      body: req.body
+    });
 
     return httpResponses.created(res, savedata);
   } catch (err) {
     console.error("Error saving savedata:", err);
-    // Intentar borrar el archivo subido si existió
-    if (req.file && req.file.path) {
+
+    // Intentar borrar archivo original si aún existe
+    if (req.file?.path && fs.existsSync(req.file.path)) {
       try {
-        fs.unlink(req.file.path);
+        fs.unlinkSync(req.file.path);
       } catch (unlinkErr) {
-        console.error("Error deleting uploaded file after save failure:", unlinkErr);
+        console.error("Error deleting uploaded file after failure:", unlinkErr);
       }
     }
-    return httpResponses.badRequest(res, 'Unable to save data');
+
+    return httpResponses.badRequest(res, err.message || 'Unable to save data');
   }
 });
 
@@ -100,30 +142,6 @@ router.put('/', authenticateMW, async (req, res) => {
     return httpResponses.badRequest(res, 'Unable to update the Database');
   }
 });
-
-const uploadsRoot = path.join(__dirname, '..', '..', config.paths.uploads);
-router.get('/download', authenticateMW, async (req, res) => {
-  try {
-    const { id } = req.query;
-    if (!id) return httpResponses.badRequest(res, 'Missing "id" in query');
-
-    const saveData = await findByID({ id }, 'savedata');
-    if (!saveData || !saveData.file) return httpResponses.notFound(res, 'Savedata not found');
-
-    const filePath = path.join(uploadsRoot, saveData.id.toString(), path.basename(saveData.file));
-
-    if (!fs.existsSync(filePath)) return httpResponses.notFound(res, 'File not found');
-
-    saveData.nDownloads = (saveData.nDownloads || 0) + 1;
-    await saveData.save();
-
-    return res.download(filePath, path.basename(saveData.file));
-  } catch (err) {
-    console.error("Error while downloading:", err);
-    return httpResponses.internalError(res, 'Error processing download');
-  }
-});
-
 
 router.delete('/', authenticateMW, async (req, res) => {
   try {

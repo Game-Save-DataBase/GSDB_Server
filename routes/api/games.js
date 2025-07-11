@@ -7,6 +7,7 @@ const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQue
 const { Games } = require('../../models/Games');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
+const {getIgdbPlatformIds} = require('../../utils/constants');
 const { callIGDB } = require('../../services/igdbServices')
 const { hasLocalFields } = require('../../models/modelRegistry');
 
@@ -131,7 +132,6 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
   }
 
   try {
-    const platformIDs = await Platforms.find().distinct('IGDB_ID');
     // 2. Filtrar los IDs que no están en la base de datos
     const everyID = [];
     for (let id = IGDB_ID_INIT; id <= IGDB_ID_END; id++) {
@@ -144,7 +144,7 @@ router.post('/batch', blockIfNotDev, async (req, res) => {
     // 3. Obtener juegos desde IGDB (una sola llamada con limit)
     const gameQuery = `
       fields id, name, cover.image_id, platforms, slug, url, first_release_date;
-      where id = (${everyID.join(',')}) & platforms = (${platformIDs.join(',')}) & version_parent = null & game_type = (11,8,4,0);
+      where id = (${everyID.join(',')}) & platforms = (${getIgdbPlatformIds().join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
       limit ${everyID.length};
       sort rating_count asc;
       `;

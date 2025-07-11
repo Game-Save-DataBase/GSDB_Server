@@ -3,6 +3,7 @@ const { getSaveFileLocations } = require('../services/pcgwServices');
 const { callIGDB } = require('../services/igdbServices');
 const config = require('./config.js');
 const { Games } = require('../models/Games');
+const { getIgdbPlatformIds } = require('./constants');
 
 const igdbOpMap = {
     gt: '>',
@@ -207,86 +208,91 @@ function normalizeStr(str) {
  * @returns {Promise<Array<Game>>}
  */
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = true }) {
-  const whereString = IGDB_buildWhereViaQuery(query, 'game');
-  const baseConditions = [
-    'version_parent = null',
-    'game_type = (11,8,4,0)'
-  ];
-  if (whereString) {
-    baseConditions.push(whereString);
-  }
+    const whereString = IGDB_buildWhereViaQuery(query, 'game');
+    const baseConditions = [
+        'version_parent = null',
+        'game_type = (0,3,4,8,9,11)'
+    ];
+    if (!whereString.includes("platforms")) {
+        baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
+    }
+    if (whereString) {
+        baseConditions.push(whereString);
+    }
 
-  const finalWhere = baseConditions.join(' & ');
-  const igdbQuery = `
+    const finalWhere = baseConditions.join(' & ');
+    const igdbQuery = `
     fields name, cover.image_id, platforms, slug, id, url, first_release_date;
     limit ${limit};
     offset ${offset};
     where ${finalWhere};
-    sort id asc;
+    sort rating_count;
   `;
+    //   sort id asc;
 
-  const igdbResultsRaw = await callIGDB('games', igdbQuery);
-  const enrichedGames = await Promise.all(
-    igdbResultsRaw.map(game => createGameFromIGDB(game, complete))
-  );
 
-  return enrichedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
+    const igdbResultsRaw = await callIGDB('games', igdbQuery);
+    const enrichedGames = await Promise.all(
+        igdbResultsRaw.map(game => createGameFromIGDB(game, complete))
+    );
+
+    return enrichedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
 }
 
 const validPlatformIDsForSaveCheck = [6, 14, 3, 13]; // Windows, Mac, Linux, DOS
 async function createGameFromIGDB(game, complete = true, external = true) {
-  const {
-    id: gameID,
-    name,
-    platforms = [],
-    cover,
-    slug,
-    url: IGDB_url,
-    first_release_date,
-  } = game;
+    const {
+        id: gameID,
+        name,
+        platforms = [],
+        cover,
+        slug,
+        url: IGDB_url,
+        first_release_date,
+    } = game;
 
-  const existingGame = await Games.findOne({ gameID });
-  if (existingGame) {
-    return existingGame;
-  }
-
-  const coverURL = cover?.image_id
-    ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
-    : config.paths.gameCover_default;
-
-  const newGame = {
-    gameID,
-    title: name,
-    platformID: platforms,
-    saveID: [],
-    cover: coverURL,
-    IGDB_url,
-    release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
-    slug,
-    external,
-  };
-
-  if (complete) {
-    const matchingPlatforms = platforms.filter(p => validPlatformIDsForSaveCheck.includes(p));
-
-    if (matchingPlatforms.length > 0) {
-      const saveData = await getSaveFileLocations(name);
-      if (saveData?.saveLocations?.length) {
-        newGame.PCGW_ID = saveData.pcgwID;
-        newGame.PCGW_url = saveData.pcgwURL;
-        newGame.saveLocations = saveData.saveLocations
-          .filter(loc => matchingPlatforms.includes(loc.platform))
-          .map(loc => ({
-            platformID: loc.platform,
-            platformName: loc.platformName,
-            locations: loc.locations,
-          }));
-      }
+    const existingGame = await Games.findOne({ gameID });
+    if (existingGame) {
+        return existingGame;
     }
-  }
 
-  return newGame;
+    const coverURL = cover?.image_id
+        ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
+        : config.paths.gameCover_default;
+
+    const newGame = {
+        gameID,
+        title: name,
+        platformID: platforms,
+        saveID: [],
+        cover: coverURL,
+        IGDB_url,
+        release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
+        slug,
+        external,
+    };
+
+    if (complete) {
+        const matchingPlatforms = platforms.filter(p => validPlatformIDsForSaveCheck.includes(p));
+
+        if (matchingPlatforms.length > 0) {
+            const saveData = await getSaveFileLocations(name);
+            if (saveData?.saveLocations?.length) {
+                newGame.PCGW_ID = saveData.pcgwID;
+                newGame.PCGW_url = saveData.pcgwURL;
+                newGame.saveLocations = saveData.saveLocations
+                    .filter(loc => matchingPlatforms.includes(loc.platform))
+                    .map(loc => ({
+                        platformID: loc.platform,
+                        platformName: loc.platformName,
+                        locations: loc.locations,
+                    }));
+            }
+        }
+    }
+
+    return newGame;
 }
 
 
-module.exports = { searchGamesFromIGDB};
+module.exports = { searchGamesFromIGDB };

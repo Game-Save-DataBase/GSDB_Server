@@ -243,9 +243,16 @@ router.get('/notifications', authenticateMW, async (req, res) => {
 
 // POST /add-notification
 // Añade notificaciones en el usuario logado
-router.post('/add-notification', authenticateMW, async (req, res) => {
+router.post('/send-notification', authenticateMW, async (req, res) => {
   try {
-    const loggedUser = req.user;
+    
+    // Intentar búsqueda rápida por id
+    const user = await findByID(query, 'user');
+    if (user !== undefined) {
+      if (!user) return httpResponses.noContent(res, 'User not found');
+      return httpResponses.ok(res, user);
+    }
+
     const { type, title, body, link } = req.body;
 
     if (typeof type !== 'number' || !title || !body) {
@@ -253,7 +260,7 @@ router.post('/add-notification', authenticateMW, async (req, res) => {
     }
 
     // Comprobación de duplicados
-    const alreadyExists = loggedUser.notifications.some((n) =>
+    const alreadyExists = user.notifications.some((n) =>
       n.type === type &&
       n.title === title &&
       n.body === body &&
@@ -275,40 +282,8 @@ router.post('/add-notification', authenticateMW, async (req, res) => {
       link: link || null
     };
 
-    loggedUser.notifications.push(notification);
-    await loggedUser.save();
-
-    return httpResponses.ok(res, { message: 'Notification added', notification });
-  } catch (err) {
-    console.error('Error in /add-notification:', err);
-    return httpResponses.internalError(res, 'Error adding notification');
-  }
-});
-
-// POST /send-notification
-// Envía una notifiación al usuario indicado
-router.post('/send-notification', authenticateMW, async (req, res) => {
-  try {
-    const { toUserId, type, title, body, link } = req.body;
-
-    if (!toUserId || typeof type !== 'number' || !title || !body) {
-      return httpResponses.badRequest(res, 'Missing or invalid fields');
-    }
-    const toUser = await Users.findById(toUserId);
-    if (!toUser) return httpResponses.notFound(res, 'User not found');
-
-    const notification = {
-      _id: new mongoose.Types.ObjectId(),
-      type,
-      title,
-      body,
-      read: false,
-      createdAt: new Date(),
-      link: link || null
-    };
-
-    toUser.notifications.push(notification);
-    await toUser.save();
+    user.notifications.push(notification);
+    await user.save();
 
     return httpResponses.ok(res, { message: 'Notification sent', notification });
   } catch (err) {

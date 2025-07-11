@@ -6,11 +6,12 @@ const { hasStaticFields } = require('../../models/modelRegistry');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices');
-
+const { setIgdbPlatformIds } = require('../../utils/constants');
 
 // Función para sincronizar plataformas de IGDB y actualizar Mongo
 async function syncPlatformsFromIGDB() {
   try {
+    console.log("synking platforms...")
     // 1) Consultar platform_logos para id -> url
     const logosQuery = `fields id, url; limit 500;`;
     const platformLogos = await callIGDB('platform_logos', logosQuery);
@@ -35,33 +36,43 @@ async function syncPlatformsFromIGDB() {
     }
 
     // 4) Mapear id a url o name para logo y family respectivamente
-    const bulkOps = igdbPlatforms.map(p => ({
-      updateOne: {
-        filter: { abbreviation: p.abbreviation },
-        update: {
-          IGDB_ID: p.id,
-          abbreviation: p.abbreviation,
-          generation: p.generation,
-          name: p.name,
-          slug: p.slug,
-          logo: logoMap.get(p.platform_logo)
-            ? logoMap.get(p.platform_logo).replace('t_thumb', 't_logo_med')
-            : null,
-          family: familyMap.get(p.platform_family) || null,
-          url: p.url,
-        },
-        upsert: true,
+    let updatedCount = 0;
+    let insertedCount = 0;
+
+    // 4) Insertar o actualizar una a una (para que mongoose-sequence funcione)
+    for (const p of igdbPlatforms) {
+      const existing = await Platforms.findOne({ abbreviation: p.abbreviation });
+
+      const platformData = {
+        IGDB_ID: p.id,
+        abbreviation: p.abbreviation,
+        generation: p.generation,
+        name: p.name,
+        slug: p.slug,
+        logo: logoMap.get(p.platform_logo)
+          ? logoMap.get(p.platform_logo).replace('t_thumb', 't_logo_med').replace('.jpg', '.png')
+          : null,
+        family: familyMap.get(p.platform_family) || null,
+        url: p.url,
+      };
+
+      if (existing) {
+        // Actualizar existente
+        Object.assign(existing, platformData);
+        await existing.save();
+        updatedCount++;
+      } else {
+        // Crear nuevo (esto generará el platformID)
+        const newPlatform = new Platforms(platformData);
+        await newPlatform.save();
+        insertedCount++;
       }
-    }));
-
-
-    if (bulkOps.length > 0) {
-      const bulkResult = await Platforms.bulkWrite(bulkOps);
-      return { updatedCount: bulkResult.modifiedCount, upsertedCount: bulkResult.upsertedCount };
-    } else {
-      return { updatedCount: 0, upsertedCount: 0 };
     }
+
+    return { updatedCount, insertedCount };
+
   } catch (error) {
+    console.error("Error syncing platforms:", error);
     throw error;
   }
 }
@@ -114,6 +125,11 @@ router.get('/', async (req, res) => {
 router.post('/refresh-igdb', blockIfNotDev, async (req, res) => {
   try {
     const result = await syncPlatformsFromIGDB();
+
+    const platforms = await Platforms.find({}, { IGDB_ID: 1, _id: 0 });
+    const ids = platforms.map(p => p.IGDB_ID);
+    setIgdbPlatformIds(ids);
+
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
   } catch (err) {
     return httpResponses.internalError(res, 'Error syncing platforms from IGDB', err.message || err);

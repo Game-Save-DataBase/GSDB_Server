@@ -74,8 +74,8 @@ router.get('/savefile/:id/', (req, res) => {
 });
 
 // 5. User banner
-router.get('/user/banner', (req, res) => {
-  const userPath = path.join(userBasePath, req.user.id);
+router.get('/user/:id/banner', (req, res) => {
+  const userPath = path.join(userBasePath, req.params.id);
   const bannerFile = findFileByBaseName(userPath, 'banner');
 
   const filePath = bannerFile
@@ -87,8 +87,8 @@ router.get('/user/banner', (req, res) => {
 });
 
 // 6. User pfp
-router.get('/user/pfp', (req, res) => {
-  const userPath = path.join(userBasePath, req.user.id);
+router.get('/user/:id/pfp', (req, res) => {
+  const userPath = path.join(userBasePath, req.params.id);
   const pfpFile = findFileByBaseName(userPath, 'pfp');
 
   const filePath = pfpFile
