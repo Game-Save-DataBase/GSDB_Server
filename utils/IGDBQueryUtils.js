@@ -213,11 +213,11 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
         'version_parent = null',
         'game_type = (0,3,4,8,9,11)'
     ];
-    if (!whereString.includes("platforms")) {
-        baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
-    }
     if (whereString) {
         baseConditions.push(whereString);
+        if (!whereString.includes("platforms")) {
+            baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
+        }
     }
 
     const finalWhere = baseConditions.join(' & ');
@@ -226,7 +226,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
     limit ${limit};
     offset ${offset};
     where ${finalWhere};
-    sort rating_count;
+    sort rating_count desc;
   `;
     //   sort id asc;
 

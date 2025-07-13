@@ -55,41 +55,40 @@ router.get('/', async (req, res) => {
 async function processSaveFileUpload({ file, user, body }) {
   if (!file) throw new Error('No file uploaded');
 
-  const { gameID, tags } = body;
-  const userID = user.id;
+  const { gameID, tags, platformID, title, description } = body;
+  const tagsArray = Array.isArray(tags) ? tags : [tags];
+  const userID = user.userID;
 
   if (!gameID) throw new Error('Missing gameID');
-
-  const game = await axios.get(`${config.connection}${config.api.games}?id=${gameID}`);
+  const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
   if (!game) throw new Error('Game not found');
 
   // Crear entry temporal en DB para obtener el id (saveID)
-  const tempSaveData = await SaveDatas.create({ userID, gameID });
-  const saveID = tempSaveData.id.toString();
-
-  const finalFileName = `${game.slug}_${saveID}_${user.userName}.zip`;
-  const finalFilePath = path.join(file.destination, finalFileName);
-
-  if (path.extname(file.originalname).toLowerCase() === '.zip') {
-    fs.renameSync(file.path, finalFilePath);
-  } else {
-    await new Promise((resolve, reject) => {
-      const output = fs.createWriteStream(finalFilePath);
-      const archive = archiver('zip', { zlib: { level: 9 } });
-
-      output.on('close', resolve);
-      archive.on('error', reject);
-
-      archive.pipe(output);
-      archive.file(file.path, { name: file.originalname });
-      archive.finalize();
-    });
-
-    fs.unlinkSync(file.path);
+  const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
+  const saveID = tempSaveData.saveID.toString();
+  const finalFileName = `gsdb_${saveID}${user.userID}${game.data.gameID}.zip`;
+  const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID);
+  if (!fs.existsSync(uploadPath)) {
+    fs.mkdirSync(uploadPath, { recursive: true });
   }
 
+  const finalFilePath = path.join(uploadPath, finalFileName);
+
+  await new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(finalFilePath);
+    const archive = archiver('zip', { zlib: { level: 9 } });
+
+    output.on('close', resolve);
+    archive.on('error', reject);
+
+    archive.pipe(output);
+    archive.file(file.path, { name: file.originalname });
+    archive.finalize();
+  });
+
+  fs.unlinkSync(file.path);
+
   tempSaveData.file = finalFileName;
-  tempSaveData.tags = Array.isArray(tags) ? tags : [tags];
   await tempSaveData.save();
 
   return tempSaveData;

@@ -21,11 +21,7 @@ const screenshotStorage = multer.diskStorage({
 // Savefiles
 const saveFileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const userId = req.user?.id?.toString();
-    if (!userId) {
-      return cb(new Error('User ID not found in request'));
-    }
-    const uploadPath = path.join(__dirname, '../', config.paths.uploads, userId);
+    const uploadPath = path.join(__dirname, '../', config.paths.uploads);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }

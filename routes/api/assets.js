@@ -7,6 +7,7 @@ const fs = require('fs');
 const archiver = require('archiver');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config');
+const axios = require('axios');
 
 
 const sendFileIfExists = (res, filePath, fileName) => {
@@ -44,8 +45,61 @@ const uploadsBasePath = path.join(__dirname, '..', '..', config.paths.uploads)
 const userBasePath = path.join(__dirname, '..', '..', config.paths.userProfiles)
 const defaultsBasePath = path.join(__dirname, '..', '..', config.paths.defaults)
 
+
+// 3. Savefile screenshots
+router.get('/savedata/:id/scr', async (req, res) => {
+  const folderPath = path.join(uploadsBasePath, req.params.id);
+  const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
+  if (!fs.existsSync(scrPath)) {
+    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
+  }
+  const fileName = findFirstZip(folderPath) || `${req.params.id}.zip`;
+  createZipAndSend(res, scrPath, `screenshots-${fileName}`);
+});
+
+// 1. Savefile + screenshots
+router.get('/savedata/:id/bundle', async (req, res) => {
+  const saveId = req.params.id;
+  const savePath = path.join(uploadsBasePath, saveId);
+  const scrPath = path.join(savePath, 'scr');
+
+  if (!fs.existsSync(savePath)) {
+    return httpResponses.notFound(res, `Savedata not found for id ${saveId}`);
+  }
+
+  const saveZip = findFirstZip(savePath);
+  const hasScreenshots = fs.existsSync(scrPath);
+
+  const baseName = path.parse(saveZip || saveId).name;
+  const zipName = `bundle-${baseName}.zip`;
+
+  // Si no hay screenshots, y hay un zip, simplemente lo enviamos
+  if (!hasScreenshots && saveZip) {
+    const zipFilePath = path.join(savePath, saveZip);
+    return sendFileIfExists(res, zipFilePath, zipName); // Usamos zipName aquí
+  }
+
+  // Si hay screenshots o no hay zip, construimos un ZIP a mano
+  const archive = archiver('zip', { zlib: { level: 9 } });
+  res.attachment(zipName);
+  archive.pipe(res);
+
+  // Añadir el archivo ZIP principal si existe
+  if (saveZip) {
+    const zipFilePath = path.join(savePath, saveZip);
+    archive.file(zipFilePath, { name: saveZip });
+  }
+
+  // Añadir carpeta de screenshots si existe
+  if (hasScreenshots) {
+    archive.directory(scrPath, 'scr');
+  }
+
+  archive.finalize();
+});
+
 // 2. Savefile main file
-router.get('/savefile/:id/file', (req, res) => {
+router.get('/savedata/:id', (req, res) => {
   const folderPath = path.join(uploadsBasePath, req.params.id);
   const zipFile = findFirstZip(folderPath);
 
@@ -56,22 +110,7 @@ router.get('/savefile/:id/file', (req, res) => {
   const filePath = path.join(folderPath, zipFile);
   sendFileIfExists(res, filePath, zipFile);
 });
-// 3. Savefile screenshots
-router.get('/savefile/:id/scr', (req, res) => {
-  const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
-  if (!fs.existsSync(scrPath)) {
-    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
-  }
-  createZipAndSend(res, scrPath, `screenshots-${req.params.id}.zip`);
-});
-// 1. Savefile ZIP
-router.get('/savefile/:id/', (req, res) => {
-  const savePath = path.join(uploadsBasePath, req.params.id);
-  if (!fs.existsSync(savePath)) {
-    return httpResponses.notFound(res, `Savedata not found for id ${req.params.id}`);
-  }
-  return createZipAndSend(res, savePath, `savefile-${req.params.id}.zip`);
-});
+
 
 // 5. User banner
 router.get('/user/:id/banner', (req, res) => {
@@ -131,7 +170,8 @@ router.get('/defaults/banner', (req, res) => {
 });
 router.get('/defaults/game-cover', (req, res) => {
   const gamecoverPath = path.join(defaultsBasePath, process.env.ASSET_GAMECOVER);
-  sendFileIfExists(res, gamecoverPath, process.env.ASSET_GAMECOVER);}
+  sendFileIfExists(res, gamecoverPath, process.env.ASSET_GAMECOVER);
+}
 );
 router.get('/defaults/pfp', (req, res) => {
   const pfppath = path.join(defaultsBasePath, process.env.ASSET_PFP);
