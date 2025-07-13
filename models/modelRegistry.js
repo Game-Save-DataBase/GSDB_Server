@@ -28,6 +28,7 @@ const modelRegistry = {
         foreignKey: 'saveID',
         putFields: ['title', 'description', 'private'],
         filterFields: {
+            saveID: 'number',
             userID: 'number',
             gameID: 'number',
             platformID: 'number',
@@ -55,7 +56,7 @@ const modelRegistry = {
             following: 'array:number',
             uploads: 'array:number'
         },
-                foreignKey: 'userID',
+        foreignKey: 'userID',
 
     },
     game: {
@@ -78,7 +79,7 @@ const modelRegistry = {
             release_date: 'first_release_date',
             platformID: 'platforms'
         },
-        localFields:['saveID', 'userFav'],
+        localFields: ['saveID', 'userFav'],
     },
     comment: {
         model: require('./Comments').Comments,

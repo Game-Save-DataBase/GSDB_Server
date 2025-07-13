@@ -4,16 +4,16 @@ const cheerio = require('cheerio');
 const BASE_API = 'https://www.pcgamingwiki.com/w/api.php';
 
 const platformKeywords = [
-  { keyword: 'steam play (linux)', id: 6, displayName: 'Steam Play (Linux)' },
-  { keyword: 'windows', id: 6, displayName: 'Windows' },
-  { keyword: 'steam', id: 6, displayName: 'Steam (Windows)' },
-  { keyword: 'epic', id: 6, displayName: 'Epic Games Launcher (Windows)' },
-  { keyword: 'windows', id: 6, displayName: 'Windows' },
-  { keyword: 'pc', id: 6, displayName: 'PC' },
-  { keyword: 'mac', id: 14, displayName: 'Mac' },
-  { keyword: 'os x', id: 14, displayName: 'Mac' },
-  { keyword: 'linux', id: 3, displayName: 'Linux' },
-  { keyword: 'dos', id: 13, displayName: 'DOS' },
+  { keyword: 'steam play (linux)', id: 65, displayName: 'Steam Play (Linux)' },
+  { keyword: 'windows', id: 65, displayName: 'Windows' },
+  { keyword: 'steam', id: 65, displayName: 'Steam (Windows)' },
+  { keyword: 'epic', id: 65, displayName: 'Epic Games Launcher (Windows)' },
+  { keyword: 'windows', id: 65, displayName: 'Windows' },
+  { keyword: 'pc', id: 65, displayName: 'PC' },
+  { keyword: 'mac', id: 45, displayName: 'Mac' },
+  { keyword: 'os x', id: 45, displayName: 'Mac' },
+  { keyword: 'linux', id: 44, displayName: 'Linux' },
+  { keyword: 'dos', id: 27, displayName: 'DOS' },
 ];
 
 function mapSystemToPlatform(systemName) {

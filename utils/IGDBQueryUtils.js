@@ -3,6 +3,7 @@ const { getSaveFileLocations } = require('../services/pcgwServices');
 const { callIGDB } = require('../services/igdbServices');
 const config = require('./config.js');
 const { Games } = require('../models/Games');
+const { Platforms } = require('../models/Platforms');
 const { getIgdbPlatformIds } = require('./constants');
 
 const igdbOpMap = {
@@ -252,7 +253,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
     return enrichedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
 }
 
-const validPlatformIDsForSaveCheck = [6, 14, 3, 13]; // Windows, Mac, Linux, DOS
+const validPlatforms = [65, 45, 44, 27]; // Windows, Mac, Linux, DOS
 async function createGameFromIGDB(game, complete = true, external = true, selectDuplicates = true) {
     const {
         id: gameID,
@@ -266,10 +267,10 @@ async function createGameFromIGDB(game, complete = true, external = true, select
 
     const existingGame = await Games.findOne({ gameID });
     if (existingGame) {
-        if(selectDuplicates === true){
+        if (selectDuplicates === true) {
             return existingGame
         }
-        else{
+        else {
             return undefined
         }
     }
@@ -278,10 +279,14 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
         : config.paths.gameCover_default;
 
+    //PLATAFORMAS CON NUESTROS ID
+    const platformRes = await Platforms.find({ IGDB_ID: { $in: platforms } })
+    const platformsGSDB = platformRes.map(p => p.platformID);
+    console.log(platformsGSDB)
     const newGame = {
         gameID,
         title: name,
-        platformID: platforms,
+        platformID: platformsGSDB,
         saveID: [],
         cover: coverURL,
         IGDB_url,
@@ -291,8 +296,7 @@ async function createGameFromIGDB(game, complete = true, external = true, select
     };
 
     if (complete) {
-        const matchingPlatforms = platforms.filter(p => validPlatformIDsForSaveCheck.includes(p));
-
+        const matchingPlatforms = platformsGSDB.filter(p => validPlatforms.includes(p));
         if (matchingPlatforms.length > 0) {
             const saveData = await getSaveFileLocations(name);
             if (saveData?.saveLocations?.length) {
@@ -308,7 +312,6 @@ async function createGameFromIGDB(game, complete = true, external = true, select
             }
         }
     }
-
     return newGame;
 }
 

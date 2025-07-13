@@ -123,7 +123,6 @@ router.get('/', async (req, res) => {
  */
 router.post('/igdb', blockIfNotDev, async (req, res) => {
   const { IGDB_ID, IGDB_ID_INIT, IGDB_ID_END } = req.body;
-
   let igdbIds = [];
 
   // Validación
@@ -163,7 +162,6 @@ router.post('/igdb', blockIfNotDev, async (req, res) => {
     if (!gamesFromIGDB?.length) {
       return httpResponses.notFound(res, 'No games found or none meet GSDB criteria.');
     }
-
     const rawCreatedGames = await Promise.all(
       gamesFromIGDB.map(game => createGameFromIGDB(game, true, false, false))
     );
