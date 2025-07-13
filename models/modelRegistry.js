@@ -102,6 +102,7 @@ const modelRegistry = {
         putFields: ['name', 'description'],
         filterFields: {
             name: 'string',
+            tagID: 'number'
         },
     },
 };

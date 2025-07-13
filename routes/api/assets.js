@@ -8,6 +8,7 @@ const archiver = require('archiver');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config');
 const axios = require('axios');
+const { SaveDatas } = require('../../models/SaveDatas');
 
 
 const sendFileIfExists = (res, filePath, fileName) => {
@@ -88,6 +89,11 @@ router.get('/savedata/:id/bundle', async (req, res) => {
   if (saveZip) {
     const zipFilePath = path.join(savePath, saveZip);
     archive.file(zipFilePath, { name: saveZip });
+
+    // Buscar savedata y sumar numero de descargas
+    const saveEntry = await SaveDatas.findOne({ saveID: Number(saveId) });
+    saveEntry.nDownloads = saveEntry.nDownloads + 1
+    await saveEntry.save();
   }
 
   // Añadir carpeta de screenshots si existe
@@ -99,7 +105,7 @@ router.get('/savedata/:id/bundle', async (req, res) => {
 });
 
 // 2. Savefile main file
-router.get('/savedata/:id', (req, res) => {
+router.get('/savedata/:id', async (req, res) => {
   const folderPath = path.join(uploadsBasePath, req.params.id);
   const zipFile = findFirstZip(folderPath);
 
@@ -108,6 +114,10 @@ router.get('/savedata/:id', (req, res) => {
   }
 
   const filePath = path.join(folderPath, zipFile);
+  // Buscar savedata y sumar numero de descargas
+  const saveEntry = await SaveDatas.findOne({ saveID: Number( req.params.id) });
+  saveEntry.nDownloads = saveEntry.nDownloads + 1
+  await saveEntry.save();
   sendFileIfExists(res, filePath, zipFile);
 });
 

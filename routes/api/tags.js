@@ -22,7 +22,6 @@ router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'tag rout
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-
     // Intentar búsqueda rápida por id
     const fastResult = await findByID(query, 'tag');
     if (fastResult !== undefined) {
