@@ -23,8 +23,20 @@ const slugifyFields = ['title']; // Campos que deben slugificarse
 
 function IGDB_buildWhereViaQuery(rawQuery, modelName) {
     const modelDef = getModelDefinition(modelName);
-    if (!modelDef?.igdbFilterFields || !modelDef?.filterFields) return undefined;
+    //aqui deberia comprobar que haya algun valor en la query que NO se encuentre dentro de modelDefinition.igdbFilterFields, y si es asi devolver un error
 
+    if (!modelDef?.igdbFilterFields || !modelDef?.filterFields) return undefined;
+    // Validar claves desconocidas
+    const validFields = Object.keys(modelDef.igdbFilterFields);
+    const disallowedKeys = Object.keys(rawQuery).filter(
+        key => key !== 'limit' && key !== 'offset' && !validFields.includes(key)
+    );
+
+    if (disallowedKeys.length) {
+        throw new Error(
+            `Invalid filter key(s) provided: ${disallowedKeys.join(', ')}`
+        );
+    }
     // Detectar si hay que aplicar slugify
     const shouldSlugify = slugifyFields.some(field =>
         field in rawQuery && 'slug' in modelDef.igdbFilterFields
@@ -208,6 +220,7 @@ function normalizeStr(str) {
  * @returns {Promise<Array<Game>>}
  */
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = true }) {
+
     const whereString = IGDB_buildWhereViaQuery(query, 'game');
     const baseConditions = [
         'version_parent = null',
@@ -240,7 +253,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
 }
 
 const validPlatformIDsForSaveCheck = [6, 14, 3, 13]; // Windows, Mac, Linux, DOS
-async function createGameFromIGDB(game, complete = true, external = true) {
+async function createGameFromIGDB(game, complete = true, external = true, selectDuplicates = true) {
     const {
         id: gameID,
         name,
@@ -253,7 +266,12 @@ async function createGameFromIGDB(game, complete = true, external = true) {
 
     const existingGame = await Games.findOne({ gameID });
     if (existingGame) {
-        return existingGame;
+        if(selectDuplicates === true){
+            return existingGame
+        }
+        else{
+            return undefined
+        }
     }
 
     const coverURL = cover?.image_id
@@ -295,4 +313,4 @@ async function createGameFromIGDB(game, complete = true, external = true) {
 }
 
 
-module.exports = { searchGamesFromIGDB };
+module.exports = { searchGamesFromIGDB, createGameFromIGDB };

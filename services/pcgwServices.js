@@ -6,6 +6,9 @@ const BASE_API = 'https://www.pcgamingwiki.com/w/api.php';
 const platformKeywords = [
   { keyword: 'steam play (linux)', id: 6, displayName: 'Steam Play (Linux)' },
   { keyword: 'windows', id: 6, displayName: 'Windows' },
+  { keyword: 'steam', id: 6, displayName: 'Steam (Windows)' },
+  { keyword: 'epic', id: 6, displayName: 'Epic Games Launcher (Windows)' },
+  { keyword: 'windows', id: 6, displayName: 'Windows' },
   { keyword: 'pc', id: 6, displayName: 'PC' },
   { keyword: 'mac', id: 14, displayName: 'Mac' },
   { keyword: 'os x', id: 14, displayName: 'Mac' },

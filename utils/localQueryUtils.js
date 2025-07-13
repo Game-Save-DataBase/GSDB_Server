@@ -61,7 +61,6 @@ async function findByID(query, modelName) {
     if (!modelDef) throw new Error(`Model definition not found for ${modelName}`);
 
     const idField = modelDef.foreignKey || '_id';  // Campo ID real en la base
-
     const keys = Object.keys(query);
     if (keys.length !== 1) return undefined;  // Solo 1 campo permitido
     const key = keys[0];

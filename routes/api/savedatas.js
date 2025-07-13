@@ -7,6 +7,7 @@ const { uploadSaveFile } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { SaveDatas } = require('../../models/SaveDatas');
+const { Games } = require('../../models/Games');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config')
@@ -102,6 +103,20 @@ router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res)
       user: req.user,
       body: req.body
     });
+
+    let game = await axios.get(`${config.connection}${config.api.games}?gameID=${req.body.gameID}&external=false`);
+    if (!game.data) {
+      //lo creamos
+      let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(req.body.gameID) });
+    }
+
+    game = await Games.findOne({ gameID: Number(req.body.gameID) });
+    if (game) {
+      if (!game.saveID.includes(savedata.saveID)) {
+        game.saveID.push(savedata.saveID);
+        await game.save();
+      }
+    }
 
     return httpResponses.created(res, savedata);
   } catch (err) {

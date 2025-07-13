@@ -7,7 +7,7 @@ const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQue
 const { Games } = require('../../models/Games');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
-const {getIgdbPlatformIds} = require('../../utils/constants');
+const { getIgdbPlatformIds } = require('../../utils/constants');
 const { callIGDB } = require('../../services/igdbServices')
 const { hasLocalFields } = require('../../models/modelRegistry');
 
@@ -42,6 +42,7 @@ async function localGameSearch(req, res, query) {
   if (results.length === 0) {
     return httpResponses.noContent(res, 'No coincidences');
   }
+  results.sort((a, b) => a.gameID - b.gameID);
   return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 }
 
@@ -120,61 +121,74 @@ router.get('/', async (req, res) => {
  * @desc Añadir juegos a la base de datos usando un rango de IDs de IGDB
  * @access Dev only
  */
-router.post('/batch', blockIfNotDev, async (req, res) => {
-  const { IGDB_ID_INIT, IGDB_ID_END } = req.body;
+router.post('/igdb', blockIfNotDev, async (req, res) => {
+  const { IGDB_ID, IGDB_ID_INIT, IGDB_ID_END } = req.body;
 
-  if (!IGDB_ID_INIT || typeof IGDB_ID_INIT !== 'number') {
-    return httpResponses.badRequest(res, 'IGDB_ID_INIT is required and must be a number');
-  }
+  let igdbIds = [];
 
-  if (!IGDB_ID_END || typeof IGDB_ID_END !== 'number') {
-    return httpResponses.badRequest(res, 'IGDB_ID_END is required and must be a number');
+  // Validación
+  if (typeof IGDB_ID === 'number') {
+    igdbIds = [IGDB_ID];
+  } else if (
+    typeof IGDB_ID_INIT === 'number' &&
+    typeof IGDB_ID_END === 'number'
+  ) {
+    if (IGDB_ID_END < IGDB_ID_INIT) {
+      return httpResponses.badRequest(res, 'IGDB_ID_END must be greater than or equal to IGDB_ID_INIT');
+    }
+
+    for (let id = IGDB_ID_INIT; id <= IGDB_ID_END; id++) {
+      igdbIds.push(id);
+    }
+  } else {
+    return httpResponses.badRequest(
+      res,
+      'Must provide either IGDB_ID (number) or both IGDB_ID_INIT and IGDB_ID_END (numbers)'
+    );
   }
 
   try {
-    // 2. Filtrar los IDs que no están en la base de datos
-    const everyID = [];
-    for (let id = IGDB_ID_INIT; id <= IGDB_ID_END; id++) {
-      everyID.push(id);
-    }
-
-    if (everyID.length === 0) {
+    if (igdbIds.length === 0) {
       return httpResponses.notFound(res, 'No new games to fetch; all IDs already exist in the database.');
     }
-    // 3. Obtener juegos desde IGDB (una sola llamada con limit)
+
     const gameQuery = `
       fields id, name, cover.image_id, platforms, slug, url, first_release_date;
-      where id = (${everyID.join(',')}) & platforms = (${getIgdbPlatformIds().join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
-      limit ${everyID.length};
+      where id = (${igdbIds.join(',')}) & platforms = (${getIgdbPlatformIds().join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
+      limit ${igdbIds.length};
       sort rating_count asc;
-      `;
-      // sort id asc;
+    `;
     const gamesFromIGDB = await callIGDB('games', gameQuery);
+
     if (!gamesFromIGDB?.length) {
       return httpResponses.notFound(res, 'No games found or none meet GSDB criteria.');
     }
 
-    // 4. Preparar juegos para insertar con la función extraída
-    const createdGames = await Promise.all(
-      gamesFromIGDB.map(game => createGameFromIGDB(game, true, false))
+    const rawCreatedGames = await Promise.all(
+      gamesFromIGDB.map(game => createGameFromIGDB(game, true, false, false))
     );
 
-    // 5. Insertar en lote
-    await Games.insertMany(createdGames);
+    const createdGames = rawCreatedGames.filter(game => game !== undefined);
+
+    // Inserción: uno o muchos
+    if (createdGames.length === 1) {
+      await new Games(createdGames[0]).save();
+    } else {
+      await Games.insertMany(createdGames);
+    }
 
     return httpResponses.created(
       res,
-      `${createdGames.length} games added successfully.`,
+      `${createdGames.length} game${createdGames.length > 1 ? 's' : ''} added successfully.`,
       createdGames
     );
 
-} catch (err) {
-  console.error('[ERROR] Could not add games from IGDB:', err);
+  } catch (err) {
+    console.error('[ERROR] Could not add games from IGDB:', err);
 
-  const { handler } = httpResponses.mapStatusToHttpError(err.status || 500);
-  return handler(res, err.message || 'Unexpected error while adding games');
-}
-
+    const { handler } = httpResponses.mapStatusToHttpError(err.status || 500);
+    return handler(res, err.message || 'Unexpected error while adding games');
+  }
 });
 
 /**
@@ -192,8 +206,9 @@ router.delete('/', authenticateMW, async (req, res) => {
     if (!game) {
       return httpResponses.notFound(res, 'Game not found');
     }
+    console.log(game)
 
-    await game.remove();
+    await game.deleteOne();
 
     return httpResponses.ok(res, { message: 'Game entry deleted successfully' });
   } catch (err) {
@@ -283,7 +298,6 @@ router.delete('/favorites', authenticateMW, async (req, res) => {
     return httpResponses.internalError(res, 'Error removing from favorites', err.message);
   }
 });
-
 
 
 
