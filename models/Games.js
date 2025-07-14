@@ -31,6 +31,32 @@ const GameSchema = new mongoose.Schema({
         }
     ]
 });
+// Hook: después de guardar, detectamos si se añadió un save nuevo
+GameSchema.post('save', async function (doc, next) {
+    try {
+        // Cargamos el estado anterior del documento
+        const previous = await mongoose.models.games.findById(doc._id).lean();
+        if (!previous) return next();
+
+        const prevSaves = new Set(previous.saveID);
+        const newSaves = doc.saveID.filter(save => !prevSaves.has(save));
+        if (newSaves.length === 0) return next(); // no se añadió nada nuevo
+
+        // Notificar a todos los userFav
+        if (doc.userFav.length > 0) {
+            await sendSystemNotificationToUsers({
+                userIDs: doc.userFav,
+                type: 2,
+                args: { game: { title: doc.title, slug: doc.slug } }
+            });
+        }
+
+        next();
+    } catch (err) {
+        console.error('Error in Games post-save hook:', err);
+        next(err);
+    }
+});
 
 
 const Games = mongoose.models.Games || mongoose.model('games', GameSchema);

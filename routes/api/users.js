@@ -14,6 +14,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const config = require('../../utils/config');
 const axios = require('axios');
+const notificationTemplates = require('../../utils/notificationTemplates');
 
 
 // Ruta de test, dev mode
@@ -257,60 +258,62 @@ router.get('/notifications', authenticateMW, async (req, res) => {
   }
 });
 
-// POST /add-notification
-// Añade notificaciones en el usuario logado
+
 router.post('/send-notification', authenticateMW, async (req, res) => {
   try {
-    
-    const { userID } = req.query;
-    if (!userID) return httpResponses.badRequest(res, 'Missing "userID" in query');
-    // Intentar búsqueda rápida por id
-    const user = await Users.findOne({ userID: userID });
-    if (user !== undefined) {
-      if (!user) return httpResponses.noContent(res, 'User not found');
+    const { type, args, userID, userIDs } = req.body;
+
+    if (typeof type !== 'number' || !args || (!userID && !userIDs)) {
+      return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), args (object), and userID(s) required');
     }
 
-    const { type, title, body, link } = req.body;
-    console.log(req.body)
-
-    if (typeof type !== 'number' || !title || !body) {
-      console.log("error")
-      return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), title, body required');
+    const templateFn = notificationTemplates[type];
+    if (!templateFn) {
+      return httpResponses.badRequest(res, `Unknown notification type: ${type}`);
     }
 
-    // Comprobación de duplicados
-    const alreadyExists = user.notifications.some((n) =>
-      n.type === type &&
-      n.title === title &&
-      n.body === body &&
-      (link ? n.link === link : true)
-    );
-
-    if (alreadyExists) {
-      console.log("already exists")
-      return httpResponses.conflict(res, 'Duplicate notification already exists');
-    }
-
-
-    const notification = {
+    // Crear notificación usando la plantilla
+    const notificationData = {
+      ...templateFn(args),
       _id: new mongoose.Types.ObjectId(),
-      type,
-      title,
-      body,
       read: false,
       createdAt: new Date(),
-      link: link || null
     };
-    console.log(notification)
-    user.notifications.push(notification);
-    await user.save();
 
-    return httpResponses.ok(res, { message: 'Notification sent', notification });
+    const targets = userIDs || [userID];
+    const users = await Users.find({ userID: { $in: targets } });
+
+    if (!users.length) {
+      return httpResponses.notFound(res, 'No valid target users found');
+    }
+
+    let notificationsSent = 0;
+    for (const user of users) {
+      const alreadyExists = user.notifications.some((n) =>
+        n.type === notificationData.type &&
+        n.title === notificationData.title &&
+        n.body === notificationData.body &&
+        (notificationData.link ? n.link === notificationData.link : true)
+      );
+
+      if (!alreadyExists) {
+        user.notifications.push(notificationData);
+        await user.save();
+        notificationsSent++;
+      }
+    }
+
+    return httpResponses.ok(res, {
+      message: `Notification sent to ${notificationsSent} user(s)`,
+      notification: notificationData,
+    });
+
   } catch (err) {
     console.error('Error in /send-notification:', err);
     return httpResponses.internalError(res, 'Error sending notification');
   }
 });
+
 
 // DELETE /remove-notification/:notificationId
 // Borrar una notificacion por id
