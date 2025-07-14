@@ -100,7 +100,7 @@ router.get('/', async (req, res) => {
     // Detectamos si external está explícitamente a 'false' (string) -> buscamos solo en mongodb
     // if (!isExternal) {
     if (!isExternal || hasLocalFields(query, 'game')) {
-      console.log("haciendo query local")
+      delete query.complete;
       return await localGameSearch(req, res, query)
     }
 

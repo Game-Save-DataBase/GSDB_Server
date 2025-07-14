@@ -261,17 +261,20 @@ router.get('/notifications', authenticateMW, async (req, res) => {
 // Añade notificaciones en el usuario logado
 router.post('/send-notification', authenticateMW, async (req, res) => {
   try {
-
+    
+    const { userID } = req.query;
+    if (!userID) return httpResponses.badRequest(res, 'Missing "userID" in query');
     // Intentar búsqueda rápida por id
-    const user = await findByID(query, 'user');
+    const user = await Users.findOne({ userID: userID });
     if (user !== undefined) {
       if (!user) return httpResponses.noContent(res, 'User not found');
-      return httpResponses.ok(res, user);
     }
 
     const { type, title, body, link } = req.body;
+    console.log(req.body)
 
     if (typeof type !== 'number' || !title || !body) {
+      console.log("error")
       return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), title, body required');
     }
 
@@ -284,6 +287,7 @@ router.post('/send-notification', authenticateMW, async (req, res) => {
     );
 
     if (alreadyExists) {
+      console.log("already exists")
       return httpResponses.conflict(res, 'Duplicate notification already exists');
     }
 
@@ -297,7 +301,7 @@ router.post('/send-notification', authenticateMW, async (req, res) => {
       createdAt: new Date(),
       link: link || null
     };
-
+    console.log(notification)
     user.notifications.push(notification);
     await user.save();
 
