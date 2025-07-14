@@ -19,7 +19,6 @@ const mongoOpMap = {
 async function findByQuery(query, modelName) {
     const modelDef = getModelDefinition(modelName);
     if (!modelDef) throw new Error(`Model definition not found for model: ${modelName}`);
-
     let limit = 50;
     let offset = 0;
 
@@ -109,10 +108,8 @@ async function buildMongoFilter(query, modelName, visitedRelations = []) {
 
     // Procesar filtros relacionales recursivamente
     await processRelationalFilters(filter, relationalFilters, visitedRelations);
-
     // Procesar filtros directos
     processDirectFilters(filter, directFilters, filterFields);
-
     // Manejar _id especial
     processIdFilter(filter, directFilters._id);
 
@@ -184,7 +181,6 @@ function parseFilterValue(value, type, fieldName = 'unknown') {
         for (const op in value) {
             const mongoOp = mongoOpMap[op];
             if (!mongoOp) continue;
-
             try {
                 let v = value[op];
                 if (subtype === 'string' && mongoOp === '$regex') {
@@ -194,13 +190,23 @@ function parseFilterValue(value, type, fieldName = 'unknown') {
                     else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
                     else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
                     v = new RegExp(pattern, 'i');
+                } if ((mongoOp === '$in' || mongoOp === '$nin') && typeof v === 'string') {
+                    // Split string into array and cast each element
+                    v = v.split(',').map(val => castValueByType(val.trim(), subtype));
                 } else {
                     v = castValueByType(v, subtype);
                 }
 
+                if (mongoOp === '$in' || mongoOp === '$nin' || isArray) {
+                    if (typeof v === 'string') {
+                        v = v.split(',').map(elem => castValueByType(elem.trim(), subtype));
+                    } else if (!Array.isArray(v)) {
+                        v = [castValueByType(v, subtype)];
+                    }
+                }
+
                 if (isArray && mongoOp === '$eq') {
-                    const elems = Array.isArray(v) ? v : [v];
-                    return { $all: elems, $size: elems.length };
+                    return { $all: v, $size: v.length };
                 }
 
                 res[mongoOp] = v;

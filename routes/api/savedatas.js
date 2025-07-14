@@ -96,6 +96,29 @@ async function processSaveFileUpload({ file, user, body }) {
 }
 
 
+async function updateGameAfterUpload(gameID, saveID) {
+
+  let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`);
+  if (!game.data) {
+    //lo creamos
+    let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(gameID) });
+  }
+
+  game = await Games.findOne({ gameID: Number(gameID) });
+  if (game) {
+    if (!game.saveID.includes(saveID)) {
+      game.saveID.push(saveID);
+      await game.save();
+    }
+  }
+}
+async function updateUserAfterUpload(loggedUser, saveID) {
+  if (!loggedUser.uploads.includes(saveID)) {
+    loggedUser.uploads.push(saveID);
+    await loggedUser.save();
+  }
+}
+
 router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res) => {
   try {
     const savedata = await processSaveFileUpload({
@@ -104,19 +127,8 @@ router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res)
       body: req.body
     });
 
-    let game = await axios.get(`${config.connection}${config.api.games}?gameID=${req.body.gameID}&external=false`);
-    if (!game.data) {
-      //lo creamos
-      let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(req.body.gameID) });
-    }
-
-    game = await Games.findOne({ gameID: Number(req.body.gameID) });
-    if (game) {
-      if (!game.saveID.includes(savedata.saveID)) {
-        game.saveID.push(savedata.saveID);
-        await game.save();
-      }
-    }
+    await updateGameAfterUpload(req.body.gameID, savedata.saveID)
+    await updateUserAfterUpload(req.user, savedata.saveID)
 
     return httpResponses.created(res, savedata);
   } catch (err) {

@@ -132,22 +132,20 @@ router.post('/favorite-game-toggle', authenticateMW, async (req, res) => {
       if (resPost.data.count <= 0) {
         return httpResponses.notFound(res, `Game with gameID ${gameIDNum} or not follow GSDB criteria`);
       }
-      game = resPost.data.data
+      game = await Games.findOne({ gameID: gameIDNum });
     }
     if (isNaN(gameIDNum)) {
       return httpResponses.badRequest(res, 'gameID must be a valid number');
     }
 
     const alreadyFavorite = loggedUser.favGames.includes(gameIDNum);
-
     if (action === 'favorite') {
       if (alreadyFavorite) {
         return httpResponses.ok(res, { message: 'Game already in favorites' });
       }
       loggedUser.favGames.push(gameIDNum);
-      if (!game.userFav.includes(loggedUser.userID)) {
+      if (game.userFav.length === 0 || !game.userFav.includes(loggedUser.userID)) {
         game.userFav.push(loggedUser.userID);
-        await game.save();
       }
 
     } else if (action === 'unfavorite') {
