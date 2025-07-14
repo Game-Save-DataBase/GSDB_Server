@@ -282,7 +282,6 @@ async function createGameFromIGDB(game, complete = true, external = true, select
     //PLATAFORMAS CON NUESTROS ID
     const platformRes = await Platforms.find({ IGDB_ID: { $in: platforms } })
     const platformsGSDB = platformRes.map(p => p.platformID);
-    console.log(platformsGSDB)
     const newGame = {
         gameID,
         title: name,

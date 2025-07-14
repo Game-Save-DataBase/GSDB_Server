@@ -5,7 +5,6 @@ const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQueryUtils.js');
 const { Games } = require('../../models/Games');
-const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { getIgdbPlatformIds } = require('../../utils/constants');
 const { callIGDB } = require('../../services/igdbServices')
@@ -117,7 +116,7 @@ router.get('/', async (req, res) => {
 
 
 /**
- * @route POST api/games/batch
+ * @route POST api/games/igdb
  * @desc Añadir juegos a la base de datos usando un rango de IDs de IGDB
  * @access Dev only
  */
@@ -174,12 +173,16 @@ router.post('/igdb', blockIfNotDev, async (req, res) => {
     } else {
       await Games.insertMany(createdGames);
     }
+    // Volver a buscar desde la base de datos para obtener los documentos persistidos completos
+    const savedGames = await Games.find({
+      gameID: { $in: createdGames.map(game => game.gameID) }
+    });
 
-    return httpResponses.created(
-      res,
-      `${createdGames.length} game${createdGames.length > 1 ? 's' : ''} added successfully.`,
-      createdGames
-    );
+    return res.status(201).json({
+      message: `${savedGames.length} game${savedGames.length > 1 ? 's' : ''} added successfully.`,
+      count: savedGames.length,
+      data: savedGames
+    });
 
   } catch (err) {
     console.error('[ERROR] Could not add games from IGDB:', err);
@@ -204,8 +207,6 @@ router.delete('/', authenticateMW, async (req, res) => {
     if (!game) {
       return httpResponses.notFound(res, 'Game not found');
     }
-    console.log(game)
-
     await game.deleteOne();
 
     return httpResponses.ok(res, { message: 'Game entry deleted successfully' });
@@ -226,74 +227,6 @@ router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     return httpResponses.internalError(res, 'Error wiping games', err.message);
-  }
-});
-
-/**
- * @route POST api/games/favorites
- * @desc Añade al usuario autenticado a la lista de favoritos de un juego
- * @access Authenticated
- */
-router.post('/favorites', authenticateMW, async (req, res) => {
-  try {
-
-    const { id: gameId } = req.query;
-    if (!gameId) {
-      return httpResponses.badRequest(res, 'Missing "id" in query');
-    }
-
-    const loggedUser = req.user;
-
-    const game = await findByID({ id: gameId }, 'game');
-    if (!game) return httpResponses.notFound(res, 'Game not found');
-
-    if (!game.userFav.includes(loggedUser._id)) {
-      game.userFav.push(loggedUser._id);
-      await game.save();
-    }
-
-    return httpResponses.ok(res, {
-      message: `User added to favorites list`
-    });
-  } catch (err) {
-    return httpResponses.internalError(res, 'Error adding user', err.message);
-  }
-});
-
-/**
- * @route DELETE api/games/:gameId/favorites
- * @desc Elimina al usuario autenticado de los favoritos del juego
- * @access Authenticated
- */
-/**
- * @route DELETE api/games/favorites
- * @desc Elimina al usuario autenticado de los favoritos del juego
- * @access Authenticated
- */
-router.delete('/favorites', authenticateMW, async (req, res) => {
-  try {
-    const { id: gameId } = req.query;
-    if (!gameId) {
-      return httpResponses.badRequest(res, 'Missing "id" in query');
-    }
-    const loggedUser = req.user;
-
-    const game = await findByID({ id: gameId }, 'game');
-    if (!game) return httpResponses.notFound(res, 'Game not found');
-
-    const initialCount = game.userFav.length;
-    game.userFav = game.userFav.filter(userId => userId.toString() !== loggedUser._id.toString());
-
-    if (game.userFav.length === initialCount) {
-      return httpResponses.notFound(res, 'User was not in favorites');
-    }
-    await game.save();
-
-    return httpResponses.ok(res, {
-      message: `User removed from favorites list`,
-    });
-  } catch (err) {
-    return httpResponses.internalError(res, 'Error removing from favorites', err.message);
   }
 });
 

@@ -4,6 +4,7 @@ const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { Users } = require('../../models/Users');
+const { Games } = require('../../models/Games');
 const { hasStaticFields } = require('../../models/modelRegistry');
 const httpResponses = require('../../utils/httpResponses');
 const bcrypt = require('bcryptjs');
@@ -12,6 +13,8 @@ const fs = require('fs/promises');
 const path = require('path');
 const mongoose = require('mongoose');
 const config = require('../../utils/config');
+const axios = require('axios');
+
 
 // Ruta de test, dev mode
 router.get('/test', blockIfNotDev, (req, res) => res.send('user route testing!'));
@@ -122,6 +125,15 @@ router.post('/favorite-game-toggle', authenticateMW, async (req, res) => {
     const loggedUser = req.user;
 
     const gameIDNum = Number(gameID);
+    let game = await Games.findOne({ gameID: Number(gameIDNum) });
+    if (!game) {
+      //si no existe, probamos a hacer un post
+      let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(gameIDNum) });
+      if (resPost.data.count <= 0) {
+        return httpResponses.notFound(res, `Game with gameID ${gameIDNum} or not follow GSDB criteria`);
+      }
+      game = resPost.data.data
+    }
     if (isNaN(gameIDNum)) {
       return httpResponses.badRequest(res, 'gameID must be a valid number');
     }
@@ -133,15 +145,21 @@ router.post('/favorite-game-toggle', authenticateMW, async (req, res) => {
         return httpResponses.ok(res, { message: 'Game already in favorites' });
       }
       loggedUser.favGames.push(gameIDNum);
+      if (!game.userFav.includes(loggedUser.userID)) {
+        game.userFav.push(loggedUser.userID);
+        await game.save();
+      }
 
     } else if (action === 'unfavorite') {
       if (!alreadyFavorite) {
         return httpResponses.ok(res, { message: 'Game not in favorites' });
       }
       loggedUser.favGames = loggedUser.favGames.filter(id => id !== gameIDNum);
+      game.userFav = game.userFav.filter(userId => userId !== loggedUser.userID);
     }
 
     await loggedUser.save();
+    await game.save()
 
     return httpResponses.ok(res, { message: `Game ${action}d successfully` });
 
@@ -245,7 +263,7 @@ router.get('/notifications', authenticateMW, async (req, res) => {
 // Añade notificaciones en el usuario logado
 router.post('/send-notification', authenticateMW, async (req, res) => {
   try {
-    
+
     // Intentar búsqueda rápida por id
     const user = await findByID(query, 'user');
     if (user !== undefined) {
