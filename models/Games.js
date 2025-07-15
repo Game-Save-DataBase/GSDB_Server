@@ -7,6 +7,7 @@
 * De todas formas, guardamos aqui la informacion esencial para identificar nuestro juego
  * */
 const config = require('../utils/config');
+const { sendNotification } = require('../scripts/sendNotification');
 
 const mongoose = require('mongoose');
 
@@ -31,23 +32,36 @@ const GameSchema = new mongoose.Schema({
         }
     ]
 });
-// Hook: después de guardar, detectamos si se añadió un save nuevo
+
+
+GameSchema.pre('save', async function (next) {
+    if (this.isModified('saveID')) {
+        try {
+            const previous = await this.constructor.findById(this._id).lean();
+            previousSaveIDs = previous?.saveID || [];
+        } catch (err) {
+            console.error('Error in Game pre-save hook:', err);
+            previousSaveIDs = [];
+        }
+    } else {
+        previousSaveIDs = null;
+    }
+    next();
+});
+
 GameSchema.post('save', async function (doc, next) {
     try {
-        // Cargamos el estado anterior del documento
-        const previous = await mongoose.models.games.findById(doc._id).lean();
-        if (!previous) return next();
+        if (!previousSaveIDs) return next();
 
-        const prevSaves = new Set(previous.saveID);
-        const newSaves = doc.saveID.filter(save => !prevSaves.has(save));
-        if (newSaves.length === 0) return next(); // no se añadió nada nuevo
+        const prevSet = new Set(previousSaveIDs);
+        const newSaves = doc.saveID.filter(save => !prevSet.has(save));
+        if (newSaves.length === 0) return next();
 
-        // Notificar a todos los userFav
         if (doc.userFav.length > 0) {
-            await sendSystemNotificationToUsers({
+            await sendNotification({
                 userIDs: doc.userFav,
                 type: 2,
-                args: { game: { title: doc.title, slug: doc.slug } }
+                args: { game: doc }
             });
         }
 

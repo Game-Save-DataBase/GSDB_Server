@@ -2,15 +2,15 @@
 module.exports = {
   1: ({ followerUser }) => ({
     type: 1,
-    title: `${followerUser.alias} comenzó a seguirte`,
-    body: `¡Tienes un nuevo seguidor! ${followerUser.alias} (@${followerUser.userName}) ahora te sigue.`,
+    title: `${followerUser.alias} now follows you.`,
+    body: `You have a new follower! ${followerUser.alias} (@${followerUser.userName}) now follows you.`,
     link: `/u/${followerUser.userName}`,
   }),
 
   2: ({ game }) => ({
     type: 2,
-    title: `Nuevo Save para "${game.title}"`,
-    body: `Alguien ha añadido un nuevo save en tu juego favorito "${game.title}"`,
+    title: `New upload for "${game.title}"`,
+    body: `Check the new savedata uploaded to your favorite game "${game.title}."`,
     link: `/g/${game.slug}`,
   }),
 

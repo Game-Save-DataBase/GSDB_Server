@@ -40,7 +40,6 @@ async function searchBestMatch(gameName) {
   });
 
   const [, titles, , urls] = response.data;
-
   if (!titles.length || !urls.length) {
     return null;
   }

@@ -14,138 +14,183 @@ const AutoIncrement = require('mongoose-sequence')(mongoose);
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 const { encrypt, decrypt } = require('../utils/encrypt.js');
 const userAssetsBasePath = path.join(__dirname, '..', config.paths.userProfiles);
+const {sendNotification} = require('../scripts/sendNotification');
 
 const UserSchema = new mongoose.Schema({
-    userName: { type: String, required: true, unique: true },     //nombre del usuario
-    alias: { type: String, default: "" },           //nombre de usuario con el que quiere que se le identifique publicamente
-    mail: { type: String, required: true, unique: true },         //indica si es un administrador de la pagina
-    password: { type: String, required: true },  //estara encriptada
-    admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
-    verified: { type: Boolean, default: false },    //indica si es un usuario verificado
-    rating: { type: Number, default: 0 },             //valoracion del usuario 
-    favGames: { type: [Number], default: [] },    //lista de juegos marcados como favoritos
-    favSaves: { type: [Number], default: [] },    //lista de archivos marcados como favoritos
-    following: { type: [Number], default: [] },   //lista de usuarios a los que sigue
-    followers: { type: [Number], default: [] },   //lista de usuarios que le siguen
-    uploads: { type: [Number], default: [] },       //lista de archivos subidos por este usuario
-    bio: { type: String, default: "" },                  //biografia/descripcion del usuario
-    downloadHistory: { type: [String], default: [] },  //historial de descargas del usuario
-    reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
-        type: [
-            {
-                saveID: { type: Number },
-                rating: { type: Number }
-            }
-        ], default: []
-    },
-    notifications: { //notificaciones
-        type: [
-            {
-                _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
-                type: { type: Number },
-                title: { type: String },
-                body: { type: String },
-                read: { type: Boolean, default: false },
-                createdAt: { type: Date },
-                link: { type: String }
-            }
-        ]
+  userName: { type: String, required: true, unique: true },     //nombre del usuario
+  alias: { type: String, default: "" },           //nombre de usuario con el que quiere que se le identifique publicamente
+  mail: { type: String, required: true, unique: true },         //indica si es un administrador de la pagina
+  password: { type: String, required: true },  //estara encriptada
+  admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
+  verified: { type: Boolean, default: false },    //indica si es un usuario verificado
+  rating: { type: Number, default: 0 },             //valoracion del usuario 
+  favGames: { type: [Number], default: [] },    //lista de juegos marcados como favoritos
+  favSaves: { type: [Number], default: [] },    //lista de archivos marcados como favoritos
+  following: { type: [Number], default: [] },   //lista de usuarios a los que sigue
+  followers: { type: [Number], default: [] },   //lista de usuarios que le siguen
+  uploads: { type: [Number], default: [] },       //lista de archivos subidos por este usuario
+  bio: { type: String, default: "" },                  //biografia/descripcion del usuario
+  downloadHistory: { type: [String], default: [] },  //historial de descargas del usuario
+  reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
+    type: [
+      {
+        saveID: { type: Number },
+        rating: { type: Number }
+      }
+    ], default: []
+  },
+  notifications: { //notificaciones
+    type: [
+      {
+        _id: { type: mongoose.Schema.Types.ObjectId, default: () => new mongoose.Types.ObjectId() },
+        type: { type: Number },
+        title: { type: String },
+        body: { type: String },
+        read: { type: Boolean, default: false },
+        createdAt: { type: Date },
+        link: { type: String }
+      }
+    ]
 
-    }
+  }
 });
 
 // Añade el campo 'id' autoincremental
 UserSchema.plugin(AutoIncrement, { inc_field: 'userID', start_seq: 0 });
 
 UserSchema.statics.findByIdentifier = async function (identifier) {
-    const normalized = identifier.toLowerCase();
-    const encryptedMail = encrypt(normalized);
+  const normalized = identifier.toLowerCase();
+  const encryptedMail = encrypt(normalized);
 
-    return await this.findOne({
-        $or: [
-            { mail: encryptedMail },
-            { userName: normalized }
-        ]
-    });
+  return await this.findOne({
+    $or: [
+      { mail: encryptedMail },
+      { userName: normalized }
+    ]
+  });
 };
 
 // comportamientos antes de guardar
 UserSchema.pre('save', async function (next) {
-    try {
-        if (this.isModified('password')) {
-            const salt = await bcrypt.genSalt(10); //salt = valor aleatorio
-            this.password = await bcrypt.hash(this.password, salt); //hashea la contraseña
-        }
-        if (this.isModified('mail')) {
-            const normalizedMail = this.mail.toLowerCase();
-            this.mail = encrypt(normalizedMail);
-        }
-        if (this.isModified('bio')) {
-            const MAX_LINES = 5;
-            const MAX_BIO_LENGTH = 500;
-
-            const bioLines = this.bio.split('\n');
-            if (bioLines.length > MAX_LINES) {
-                throw new Error(`Bio must have no more than ${MAX_LINES} lines`);
-            }
-            if (this.bio.length > MAX_BIO_LENGTH) {
-                throw new Error(`Bio must be shorter than ${MAX_BIO_LENGTH} characters`);
-            }
-
-            this.bio = bioLines.map(line => line.trim()).join('\n').trim();
-        }
-        if (this.isModified("userName")) {
-            const original = this.userName;
-            this.userName = this.userName.toLowerCase();
-
-            if (this.userName.length > 25) {
-                const err = new Error("El nombre de usuario no puede tener más de 15 caracteres.");
-                return next(err);
-            }
-
-            const valid = /^[a-z0-9_]+$/.test(this.userName);
-            if (!valid) {
-                const err = new Error("El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos.");
-                return next(err);
-            }
-
-            if (original !== this.userName) {
-                console.log(`Normalizado userName: ${original} -> ${this.userName}`);
-            }
-        }
-
-        next();
-    } catch (err) {
-        next(err);
+  try {
+    if (this.isModified('password')) {
+      const salt = await bcrypt.genSalt(10); //salt = valor aleatorio
+      this.password = await bcrypt.hash(this.password, salt); //hashea la contraseña
     }
+    if (this.isModified('mail')) {
+      const normalizedMail = this.mail.toLowerCase();
+      this.mail = encrypt(normalizedMail);
+    }
+    if (this.isModified('bio')) {
+      const MAX_LINES = 5;
+      const MAX_BIO_LENGTH = 500;
+
+      const bioLines = this.bio.split('\n');
+      if (bioLines.length > MAX_LINES) {
+        throw new Error(`Bio must have no more than ${MAX_LINES} lines`);
+      }
+      if (this.bio.length > MAX_BIO_LENGTH) {
+        throw new Error(`Bio must be shorter than ${MAX_BIO_LENGTH} characters`);
+      }
+
+      this.bio = bioLines.map(line => line.trim()).join('\n').trim();
+    }
+    if (this.isModified("userName")) {
+      const original = this.userName;
+      this.userName = this.userName.toLowerCase();
+
+      if (this.userName.length > 25) {
+        const err = new Error("El nombre de usuario no puede tener más de 15 caracteres.");
+        return next(err);
+      }
+
+      const valid = /^[a-z0-9_]+$/.test(this.userName);
+      if (!valid) {
+        const err = new Error("El nombre de usuario solo puede contener letras minúsculas, números y guiones bajos.");
+        return next(err);
+      }
+
+      if (original !== this.userName) {
+        console.log(`Normalizado userName: ${original} -> ${this.userName}`);
+      }
+    }
+
+    next();
+  } catch (err) {
+    next(err);
+  }
 
 });
 
-UserSchema.post('save', async function (doc, next) {
-  const userDir = path.join(userAssetsBasePath, String(doc.userID));
+let previousFollowers = null;
 
-  try {
-    await fs.access(userDir); // Si no lanza error, el directorio ya existe
-  } catch {
+UserSchema.pre('save', async function (next) {
+  if (this.isModified('followers')) {
     try {
-      await fs.mkdir(userDir, { recursive: true });
+      const previous = await this.constructor.findById(this._id).lean();
+      previousFollowers = previous?.followers || [];
     } catch (err) {
-      console.error(`Error creating folder for userID ${doc.userID}:`, err);
+      console.error('Error in pre-save getting previous followers:', err);
+      previousFollowers = [];
     }
+  } else {
+    previousFollowers = null;
   }
-
   next();
 });
 
+UserSchema.post('save', async function (doc, next) {
+  try {
+    // Si es nuevo, solo crear la carpeta
+    if (this.isNew) {
+      const userDir = path.join(userAssetsBasePath, String(doc.userID));
+      try {
+        await fs.access(userDir);
+      } catch {
+        try {
+          await fs.mkdir(userDir, { recursive: true });
+        } catch (err) {
+          console.error(`Error creating folder for userID ${doc.userID}:`, err);
+        }
+      }
+      return next();
+    }
 
-UserSchema.pre('deleteOne', { document: false, query: true }, async function(next) {
+    // No hay cambios en followers, no hacer nada
+    if (!previousFollowers) return next();
+
+    const currentFollowers = doc.followers || [];
+    const newFollowers = currentFollowers.filter(id => !previousFollowers.includes(id));
+
+    if (newFollowers.length === 0) return next();
+
+    for (const followerID of newFollowers) {
+      const followerUser = await this.constructor.findOne({ userID: followerID }).lean();
+      if (!followerUser) continue;
+
+      await sendNotification({
+        userIDs: [doc.userID],
+        type: 1,
+        args: { followerUser }
+      });
+    }
+
+    next();
+  } catch (err) {
+    console.error('Error in Users post-save hook:', err);
+    next(err);
+  }
+});
+
+
+UserSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
   this._docToDelete = await this.model.findOne(this.getFilter()).lean();
   next();
 });
 
-UserSchema.post('deleteOne', { document: false, query: true }, async function() {
+UserSchema.post('deleteOne', { document: false, query: true }, async function () {
   const doc = this._docToDelete;
-  if (!doc) return; 
+  if (!doc) return;
 
   const userDir = path.join(userAssetsBasePath, String(doc.userID));
 

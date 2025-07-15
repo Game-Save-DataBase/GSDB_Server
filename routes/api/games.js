@@ -157,14 +157,12 @@ router.post('/igdb', blockIfNotDev, async (req, res) => {
       sort rating_count asc;
     `;
     const gamesFromIGDB = await callIGDB('games', gameQuery);
-
     if (!gamesFromIGDB?.length) {
       return httpResponses.notFound(res, 'No games found or none meet GSDB criteria.');
     }
     const rawCreatedGames = await Promise.all(
       gamesFromIGDB.map(game => createGameFromIGDB(game, true, false, false))
     );
-
     const createdGames = rawCreatedGames.filter(game => game !== undefined);
 
     // Inserción: uno o muchos

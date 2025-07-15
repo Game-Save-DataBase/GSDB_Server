@@ -97,7 +97,7 @@ async function processSaveFileUpload({ file, user, body }) {
 
 
 async function updateGameAfterUpload(gameID, saveID) {
-
+console.log("updating game after upload")
   let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`);
   if (!game.data) {
     //lo creamos
@@ -105,6 +105,7 @@ async function updateGameAfterUpload(gameID, saveID) {
   }
 
   game = await Games.findOne({ gameID: Number(gameID) });
+  console.log(game)
   if (game) {
     if (!game.saveID.includes(saveID)) {
       game.saveID.push(saveID);

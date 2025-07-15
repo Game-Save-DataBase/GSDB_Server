@@ -259,62 +259,6 @@ router.get('/notifications', authenticateMW, async (req, res) => {
 });
 
 
-router.post('/send-notification', authenticateMW, async (req, res) => {
-  try {
-    const { type, args, userID, userIDs } = req.body;
-
-    if (typeof type !== 'number' || !args || (!userID && !userIDs)) {
-      return httpResponses.badRequest(res, 'Missing or invalid fields: type (number), args (object), and userID(s) required');
-    }
-
-    const templateFn = notificationTemplates[type];
-    if (!templateFn) {
-      return httpResponses.badRequest(res, `Unknown notification type: ${type}`);
-    }
-
-    // Crear notificación usando la plantilla
-    const notificationData = {
-      ...templateFn(args),
-      _id: new mongoose.Types.ObjectId(),
-      read: false,
-      createdAt: new Date(),
-    };
-
-    const targets = userIDs || [userID];
-    const users = await Users.find({ userID: { $in: targets } });
-
-    if (!users.length) {
-      return httpResponses.notFound(res, 'No valid target users found');
-    }
-
-    let notificationsSent = 0;
-    for (const user of users) {
-      const alreadyExists = user.notifications.some((n) =>
-        n.type === notificationData.type &&
-        n.title === notificationData.title &&
-        n.body === notificationData.body &&
-        (notificationData.link ? n.link === notificationData.link : true)
-      );
-
-      if (!alreadyExists) {
-        user.notifications.push(notificationData);
-        await user.save();
-        notificationsSent++;
-      }
-    }
-
-    return httpResponses.ok(res, {
-      message: `Notification sent to ${notificationsSent} user(s)`,
-      notification: notificationData,
-    });
-
-  } catch (err) {
-    console.error('Error in /send-notification:', err);
-    return httpResponses.internalError(res, 'Error sending notification');
-  }
-});
-
-
 // DELETE /remove-notification/:notificationId
 // Borrar una notificacion por id
 router.delete('/remove-notification', authenticateMW, async (req, res) => {
