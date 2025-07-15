@@ -37,7 +37,7 @@ const saveFileStorage = multer.diskStorage({
 const userImageStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     // Obtenemos userId desde req.user
-    const userId = req.user?.id;
+    const userId = req.user?.userID;
     if (!userId) return cb(new Error('User not authenticated'));
 
     const uploadPath = path.join(__dirname, '../', config.paths.userProfiles, userId.toString());

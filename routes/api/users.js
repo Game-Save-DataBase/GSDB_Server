@@ -176,7 +176,7 @@ router.post('/updateImage', authenticateMW, (req, res) => {
         if (err.code === 'LIMIT_FILE_SIZE') { errmes = 'File size limit exceeded'; }
       }
       // En caso de error, borrar carpeta para no dejar huérfanos
-      const userFolder = path.join(__dirname, '../', config.paths.userProfiles, loggedUser.id);
+      const userFolder = path.join(__dirname, '../', config.paths.userProfiles, loggedUser.userID);
       try {
         await fs.rm(userFolder, { recursive: true, force: true });
       } catch (fsErr) {
@@ -185,7 +185,7 @@ router.post('/updateImage', authenticateMW, (req, res) => {
       return httpResponses.badRequest(res, errmes);
 
     }
-    return httpResponses.ok(res, { message: 'Image uploaded successfully', imageUrl: imagePath });
+    return httpResponses.ok(res, { message: 'Image uploaded successfully'});
   });
 });
 
@@ -195,12 +195,11 @@ router.post('/updateImage', authenticateMW, (req, res) => {
 router.put('/', authenticateMW, async (req, res) => {
   try {
     const user = req.user;
-
-    if (hasStaticFields(req.body)) {
+    if (hasStaticFields(req.body, 'user')) {
       return httpResponses.badRequest(res, 'Body contains invalid or non existent fields to update');
     }
-
     Object.assign(user, req.body);
+
     await user.save();
 
     return httpResponses.ok(res, { message: 'Updated successfully', user });

@@ -14,7 +14,7 @@ const AutoIncrement = require('mongoose-sequence')(mongoose);
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 const { encrypt, decrypt } = require('../utils/encrypt.js');
 const userAssetsBasePath = path.join(__dirname, '..', config.paths.userProfiles);
-const {sendNotification} = require('../scripts/sendNotification');
+const { sendNotification } = require('../scripts/sendNotification');
 
 const UserSchema = new mongoose.Schema({
   userName: { type: String, required: true, unique: true },     //nombre del usuario
@@ -69,10 +69,14 @@ UserSchema.statics.findByIdentifier = async function (identifier) {
     ]
   });
 };
-
+let previousFollowers = null;
+let createFolder = false;
 // comportamientos antes de guardar
 UserSchema.pre('save', async function (next) {
   try {
+    // Si es nuevo, solo crear la carpeta
+    createFolder = this.isNew
+
     if (this.isModified('password')) {
       const salt = await bcrypt.genSalt(10); //salt = valor aleatorio
       this.password = await bcrypt.hash(this.password, salt); //hashea la contraseña
@@ -114,6 +118,17 @@ UserSchema.pre('save', async function (next) {
         console.log(`Normalizado userName: ${original} -> ${this.userName}`);
       }
     }
+    if (this.isModified('followers')) {
+      try {
+        const previous = await this.constructor.findById(this._id).lean();
+        previousFollowers = previous?.followers || [];
+      } catch (err) {
+        console.error('Error in pre-save getting previous followers:', err);
+        previousFollowers = [];
+      }
+    } else {
+      previousFollowers = null;
+    }
 
     next();
   } catch (err) {
@@ -122,27 +137,9 @@ UserSchema.pre('save', async function (next) {
 
 });
 
-let previousFollowers = null;
-
-UserSchema.pre('save', async function (next) {
-  if (this.isModified('followers')) {
-    try {
-      const previous = await this.constructor.findById(this._id).lean();
-      previousFollowers = previous?.followers || [];
-    } catch (err) {
-      console.error('Error in pre-save getting previous followers:', err);
-      previousFollowers = [];
-    }
-  } else {
-    previousFollowers = null;
-  }
-  next();
-});
-
 UserSchema.post('save', async function (doc, next) {
   try {
-    // Si es nuevo, solo crear la carpeta
-    if (this.isNew) {
+    if(createFolder){
       const userDir = path.join(userAssetsBasePath, String(doc.userID));
       try {
         await fs.access(userDir);
@@ -153,8 +150,8 @@ UserSchema.post('save', async function (doc, next) {
           console.error(`Error creating folder for userID ${doc.userID}:`, err);
         }
       }
-      return next();
     }
+
 
     // No hay cambios en followers, no hacer nada
     if (!previousFollowers) return next();
