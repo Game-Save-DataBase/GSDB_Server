@@ -30,7 +30,8 @@ const GameSchema = new mongoose.Schema({
             platformName: { type: String, required: false }, // nombre visible que viene de pcgw
             locations: { type: [String], required: true } //rutas
         }
-    ]
+    ],
+    nUploads: {type: Number, default:0}
 });
 
 
@@ -64,7 +65,7 @@ GameSchema.post('save', async function (doc, next) {
                 args: { game: doc }
             });
         }
-
+        doc.nUploads+=1;
         next();
     } catch (err) {
         console.error('Error in Games post-save hook:', err);

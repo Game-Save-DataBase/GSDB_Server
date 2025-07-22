@@ -4,7 +4,7 @@ const { callIGDB } = require('../services/igdbServices');
 const config = require('./config.js');
 const { Games } = require('../models/Games');
 const { Platforms } = require('../models/Platforms');
-const { getIgdbPlatformIds } = require('./constants');
+const { getIgdbPlatformIds, getIgdbPlatformMap } = require('./constants');
 
 const igdbOpMap = {
     gt: '>',
@@ -93,34 +93,49 @@ function IGDB_buildWhereViaQuery(rawQuery, modelName) {
  * - Strings se devuelven entre comillas dobles.
  * - Números y booleanos se devuelven como string sin comillas.
  * - Fechas se convierten a timestamp UNIX (segundos).
- */
-function formatValueForIGDB(value, type) {
+ */function formatValueForIGDB(value, type) {
+    if (type.startsWith("array:")) {
+        // Extraemos tipo interno (ej: "number" en "array:number")
+        const innerType = type.slice("array:".length);
+
+        if (!Array.isArray(value)) {
+            // Si no es array, intentar convertir string separado por comas o puntos y coma
+            if (typeof value === "string") {
+                value = value.split(/[,;]/).map(v => v.trim());
+            } else {
+                throw new Error(`Expected array value for type ${type}, got: ${value}`);
+            }
+        }
+        // Formateamos cada elemento con el tipo interno
+        return value.map(v => formatValueForIGDB(v, innerType)).join(",");
+    }
+
     switch (type) {
-        case 'number':
+        case "number":
             if (isNaN(Number(value))) {
                 throw new Error(`Invalid number value: '${value}'`);
             }
             return String(Number(value));
 
-        case 'boolean':
-            if (value === 'true' || value === true) return '1';
-            if (value === 'false' || value === false) return '0';
+        case "boolean":
+            if (value === "true" || value === true) return "1";
+            if (value === "false" || value === false) return "0";
             throw new Error(`Invalid boolean value: '${value}'`);
 
-        case 'date':
+        case "date":
             const date = new Date(value);
             if (isNaN(date.getTime())) {
                 throw new Error(`Invalid date value: '${value}'`);
             }
             return String(Math.floor(date.getTime() / 1000)); // UNIX timestamp en segundos
 
-        case 'string':
+        case "string":
         default:
-            // Escapar comillas dobles por seguridad
-            const safe = String(value).replace(/["\\]/g, '');
+            const safe = String(value).replace(/["\\]/g, "");
             return `"${safe}"`;
     }
 }
+
 
 
 function slugifyString(input) {
@@ -221,29 +236,60 @@ function normalizeStr(str) {
  * @returns {Promise<Array<Game>>}
  */
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = true }) {
+    const { platformID, ...restQuery } = query;
 
-    const whereString = IGDB_buildWhereViaQuery(query, 'game');
+    // Mapear platformIDs si vienen
+    if (platformID) {
+        const map = getIgdbPlatformMap();
+        let mappedIDs = [];
+
+        if (typeof platformID === 'object' && platformID !== null) {
+            // Tiene operadores como { in: '65,48' }
+            for (const [op, rawValue] of Object.entries(platformID)) {
+                const values = String(rawValue)
+                    .split(/[,;]/)
+                    .map((v) => v.trim());
+                const mapped = values.map((v) => map[v]).filter(Boolean);
+                if (mapped.length > 0) {
+                    if (!restQuery.platformID) restQuery.platformID = {};
+                    restQuery.platformID[op] = mapped.join(',');
+                }
+            }
+        } else {
+            const values = String(platformID)
+                .split(/[,;]/)
+                .map((v) => v.trim());
+            const mapped = values.map((v) => map[v]).filter(Boolean);
+            if (mapped.length > 0) {
+                restQuery.platformID = mapped.join(',');
+            }
+        }
+    }
+
+    const whereString = IGDB_buildWhereViaQuery(restQuery, 'game');
+
     const baseConditions = [
         'version_parent = null',
         'game_type = (0,3,4,8,9,11)'
     ];
+
     if (whereString) {
         baseConditions.push(whereString);
-        if (!whereString.includes("platforms")) {
-            baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
-        }
+    }
+
+    // Si no se filtró explícitamente por plataformas, aplicar las conocidas por defecto
+    if (!whereString || !whereString.includes("platforms")) {
+        baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
     }
 
     const finalWhere = baseConditions.join(' & ');
     const igdbQuery = `
-    fields name, cover.image_id, platforms, slug, id, url, first_release_date;
-    limit ${limit};
-    offset ${offset};
-    where ${finalWhere};
-    sort rating_count desc;
-  `;
-    //   sort id asc;
-
+        fields name, cover.image_id, platforms, slug, id, url, first_release_date;
+        limit ${limit};
+        offset ${offset};
+        where ${finalWhere};
+        sort rating_count desc;
+    `;
 
     const igdbResultsRaw = await callIGDB('games', igdbQuery);
     const enrichedGames = await Promise.all(
@@ -263,6 +309,7 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         slug,
         url: IGDB_url,
         first_release_date,
+        nUploads
     } = game;
 
     const existingGame = await Games.findOne({ gameID });
@@ -292,6 +339,7 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
         slug,
         external,
+        nUploads: 0
     };
 
     if (complete) {

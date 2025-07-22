@@ -1,14 +1,20 @@
+let igdbPlatformMap = {};
 
-let igdbPlatformIds = [];
-
-function setIgdbPlatformIds(newIds) {
-  igdbPlatformIds = newIds;
+function setIgdbPlatformMap(newMap) {
+  igdbPlatformMap = newMap;
 }
+
 function getIgdbPlatformIds() {
-  return igdbPlatformIds;
+  // Devuelve solo los IGDB_IDs (únicos)
+  return Array.from(new Set(Object.values(igdbPlatformMap)));
+}
+
+function getIgdbPlatformMap() {
+  return igdbPlatformMap;
 }
 
 module.exports = {
-  setIgdbPlatformIds,
+  setIgdbPlatformMap,
   getIgdbPlatformIds,
+  getIgdbPlatformMap,
 };

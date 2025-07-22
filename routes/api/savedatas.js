@@ -97,7 +97,7 @@ async function processSaveFileUpload({ file, user, body }) {
 
 
 async function updateGameAfterUpload(gameID, saveID) {
-console.log("updating game after upload")
+  console.log("updating game after upload")
   let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`);
   if (!game.data) {
     //lo creamos
@@ -178,9 +178,14 @@ router.delete('/', authenticateMW, async (req, res) => {
     // Buscar savedata a borrar con findByID
     const deleted = await findByID({ id }, 'savedata');
     if (!deleted) return httpResponses.notFound(res, 'Savedata not found');
+    const gameID = deleted.gameID
 
     await deleted.deleteOne();
-
+    const game = await Games.findOne({ gameID: Number(gameID) });
+    if (game) {
+      game.nUploads -= 1;
+      await game.save();
+    }
     return httpResponses.ok(res, { message: 'Save data deleted successfully' });
   } catch (err) {
     console.error('Error deleting savedata:', err);
@@ -191,6 +196,7 @@ router.delete('/', authenticateMW, async (req, res) => {
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const result = await SaveDatas.deleteMany({});
+    await Games.updateMany({}, { $set: { nUploads: 0 } });
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     console.error('Error wiping saves:', err);
