@@ -19,6 +19,7 @@ const GameSchema = new mongoose.Schema({
     platformID: { type: [Number], required: true },    //ID de todas las plataformas en las que existen saves para este juego
     saveID: { type: [Number], default: [] },       //todos los ID de los saves subidos para este juego
     cover: { type: String, default: config.paths.gameCover_default }, //ruta de la imagen caratula  
+    screenshot: { type: String, default: config.paths.banner_default }, //ruta de la imagen caratula  
     IGDB_url: { type: String, required: false },
     PCGW_ID: { type: String }, //es lo que se usa al final de la url
     PCGW_url: { type: String },

@@ -284,18 +284,16 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
 
     const finalWhere = baseConditions.join(' & ');
     const igdbQuery = `
-        fields name, cover.image_id, platforms, slug, id, url, first_release_date;
+        fields name, cover.image_id, screenshots.image_id, platforms, slug, id, url, first_release_date;
         limit ${limit};
         offset ${offset};
         where ${finalWhere};
         sort rating_count desc;
     `;
-
     const igdbResultsRaw = await callIGDB('games', igdbQuery);
     const enrichedGames = await Promise.all(
         igdbResultsRaw.map(game => createGameFromIGDB(game, complete))
     );
-
     return enrichedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
 }
 
@@ -306,12 +304,12 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         name,
         platforms = [],
         cover,
+        screenshots,
         slug,
         url: IGDB_url,
         first_release_date,
         nUploads
     } = game;
-
     const existingGame = await Games.findOne({ gameID });
     if (existingGame) {
         if (selectDuplicates === true) {
@@ -325,6 +323,11 @@ async function createGameFromIGDB(game, complete = true, external = true, select
     const coverURL = cover?.image_id
         ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
         : config.paths.gameCover_default;
+    const screenshotURL = complete? 
+        Array.isArray(screenshots) && screenshots[0]?.image_id
+            ? `https://images.igdb.com/igdb/image/upload/t_1080p/${screenshots[0].image_id}.jpg`
+            : config.paths.banner_default
+            : undefined
 
     //PLATAFORMAS CON NUESTROS ID
     const platformRes = await Platforms.find({ IGDB_ID: { $in: platforms } })
@@ -335,6 +338,7 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         platformID: platformsGSDB,
         saveID: [],
         cover: coverURL,
+        screenshot: screenshotURL,
         IGDB_url,
         release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
         slug,

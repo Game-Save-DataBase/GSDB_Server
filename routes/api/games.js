@@ -151,7 +151,7 @@ router.post('/igdb', blockIfNotDev, async (req, res) => {
     }
 
     const gameQuery = `
-      fields id, name, cover.image_id, platforms, slug, url, first_release_date;
+      fields id, name, cover.image_id, screenshots.image_id, platforms, slug, url, first_release_date;
       where id = (${igdbIds.join(',')}) & platforms = (${getIgdbPlatformIds().join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
       limit ${igdbIds.length};
       sort rating_count asc;
