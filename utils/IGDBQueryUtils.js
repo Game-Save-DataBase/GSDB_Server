@@ -308,7 +308,8 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         slug,
         url: IGDB_url,
         first_release_date,
-        nUploads
+        nUploads = 0,
+        lastUpdate = null,
     } = game;
     const existingGame = await Games.findOne({ gameID });
     if (existingGame) {
@@ -343,7 +344,8 @@ async function createGameFromIGDB(game, complete = true, external = true, select
         release_date: first_release_date ? new Date(first_release_date * 1000) : undefined,
         slug,
         external,
-        nUploads: 0
+        nUploads,
+        lastUpdate,
     };
 
     if (complete) {

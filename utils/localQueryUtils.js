@@ -190,7 +190,7 @@ function parseFilterValue(value, type, fieldName = 'unknown') {
                     else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
                     else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
                     v = new RegExp(pattern, 'i');
-                } if ((mongoOp === '$in' || mongoOp === '$nin') && typeof v === 'string') {
+                } else if ((mongoOp === '$in' || mongoOp === '$nin') && typeof v === 'string') {
                     // Split string into array and cast each element
                     v = v.split(',').map(val => castValueByType(val.trim(), subtype));
                 } else {

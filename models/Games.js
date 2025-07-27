@@ -27,12 +27,13 @@ const GameSchema = new mongoose.Schema({
     userFav: { type: [Number], default: [] },    //usuarios que marcaron el juego como favorito
     saveLocations: [
         {
-            platformID: { type: Number, required: true }, //id de nuestras plataformas (las de igdb)
+            platformID: { type: Number, required: true }, //id de nuestras plataformas
             platformName: { type: String, required: false }, // nombre visible que viene de pcgw
             locations: { type: [String], required: true } //rutas
         }
     ],
-    nUploads: {type: Number, default:0}
+    nUploads: { type: Number, default: 0 },
+    lastUpdate: { type: Date, default: null }
 });
 
 
@@ -59,6 +60,10 @@ GameSchema.post('save', async function (doc, next) {
         const newSaves = doc.saveID.filter(save => !prevSet.has(save));
         if (newSaves.length === 0) return next();
 
+        const updates = {
+            $inc: { nUploads: 1 },
+            $set: { lastUpdate: new Date() }
+        };
         if (doc.userFav.length > 0) {
             await sendNotification({
                 userIDs: doc.userFav,
@@ -66,7 +71,7 @@ GameSchema.post('save', async function (doc, next) {
                 args: { game: doc }
             });
         }
-        doc.nUploads+=1;
+        await doc.updateOne(updates);
         next();
     } catch (err) {
         console.error('Error in Games post-save hook:', err);
