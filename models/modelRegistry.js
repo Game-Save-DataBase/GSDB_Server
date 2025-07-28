@@ -26,7 +26,7 @@ const modelRegistry = {
     savedata: {
         model: require('./SaveDatas').SaveDatas,
         foreignKey: 'saveID',
-        putFields: ['title', 'description', 'private'],
+        putFields: ['title', 'description', 'private', "nLikes", "nDislikes"],
         filterFields: {
             saveID: 'number',
             userID: 'number',
@@ -37,6 +37,8 @@ const modelRegistry = {
             description: 'string',
             postedDate: 'date',
             nDownloads: 'number',
+            nLikes: 'number',
+            nDislikes: 'number',
             rating: 'number'
         },
     },

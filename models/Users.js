@@ -31,14 +31,9 @@ const UserSchema = new mongoose.Schema({
   uploads: { type: [Number], default: [] },       //lista de archivos subidos por este usuario
   bio: { type: String, default: "" },                  //biografia/descripcion del usuario
   downloadHistory: { type: [String], default: [] },  //historial de descargas del usuario
-  reviews: {//estructura con el array de reviews. por ahora tiene el id del save y un string que usaremos como valoracion
-    type: [
-      {
-        saveID: { type: Number },
-        rating: { type: Number }
-      }
-    ], default: []
-  },
+  likes: { type: [Number], default: [] }, //array de saveID unicos
+  dislikes: { type: [Number], default: [] }, //array de saveID unicos
+  rating: { type: Number, default: 0 }, //valor ponderado calculado a traves de los likes y dislikes
   notifications: { //notificaciones
     type: [
       {
@@ -134,12 +129,12 @@ UserSchema.pre('save', async function (next) {
   } catch (err) {
     next(err);
   }
-
+  
 });
 
 UserSchema.post('save', async function (doc, next) {
   try {
-    if(createFolder){
+    if (createFolder) {
       const userDir = path.join(userAssetsBasePath, String(doc.userID));
       try {
         await fs.access(userDir);
@@ -151,11 +146,11 @@ UserSchema.post('save', async function (doc, next) {
         }
       }
     }
-
-
+    
+    
     // No hay cambios en followers, no hacer nada
     if (!previousFollowers) return next();
-
+    
     const currentFollowers = doc.followers || [];
     const newFollowers = currentFollowers.filter(id => !previousFollowers.includes(id));
 
@@ -164,14 +159,14 @@ UserSchema.post('save', async function (doc, next) {
     for (const followerID of newFollowers) {
       const followerUser = await this.constructor.findOne({ userID: followerID }).lean();
       if (!followerUser) continue;
-
+      
       await sendNotification({
         userIDs: [doc.userID],
         type: 1,
         args: { followerUser }
       });
     }
-
+    
     next();
   } catch (err) {
     console.error('Error in Users post-save hook:', err);
@@ -180,24 +175,80 @@ UserSchema.post('save', async function (doc, next) {
 });
 
 
+let deletedUsers = [];
+let userToDelete = null;
+
 UserSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
-  this._docToDelete = await this.model.findOne(this.getFilter()).lean();
+  try {
+    userToDelete = await this.model.findOne(this.getFilter(), 'userID').lean();
+  } catch (err) {
+    console.error('Error in pre deleteOne:', err);
+    userToDelete = null;
+  }
+  next();
+});
+
+UserSchema.pre('deleteMany', async function (next) {
+  try {
+    deletedUsers = await this.model.find(this.getFilter(), 'userID').lean();
+  } catch (err) {
+    console.error('Error in pre deleteMany:', err);
+    deletedUsers = [];
+  }
   next();
 });
 
 UserSchema.post('deleteOne', { document: false, query: true }, async function () {
-  const doc = this._docToDelete;
-  if (!doc) return;
+  if (!userToDelete) return;
 
-  const userDir = path.join(userAssetsBasePath, String(doc.userID));
+  const userDir = path.join(userAssetsBasePath, String(userToDelete.userID));
 
   try {
     await fs.rm(userDir, { recursive: true, force: true });
+
+    const { SaveDatas } = require('./SaveDatas');
+
+    await SaveDatas.updateMany(
+      { $or: [{ likes: userToDelete.userID }, { dislikes: userToDelete.userID }] },
+      {
+        $pull: {
+          likes: userToDelete.userID,
+          dislikes: userToDelete.userID
+        }
+      }
+    );
+
+    const { Games } = require('./Games');
+    await Games.updateMany(
+      { $or: [{ userFav: userToDelete.userID }] },
+      {
+        $pull: {
+          userFav: userToDelete.userID
+        }
+      }
+    );
+
+    await this.model.updateMany(
+      {
+        $or: [
+          { followers: userToDelete.userID },
+          { following: userToDelete.userID }
+        ]
+      },
+      {
+        $pull: {
+          followers: userToDelete.userID,
+          following: userToDelete.userID
+        }
+      }
+    );
+
   } catch (err) {
-    console.error(`Error deleting data for userID ${doc.userID}:`, err);
+    console.error(`Error deleting data for userID ${userToDelete.userID}:`, err);
+  } finally {
+    userToDelete = null;
   }
 });
-
 
 UserSchema.post('deleteMany', async function () {
   try {
@@ -208,10 +259,63 @@ UserSchema.post('deleteMany', async function () {
       .map(dirent => fs.rm(path.join(userAssetsBasePath, dirent.name), { recursive: true, force: true }));
 
     await Promise.all(deletions);
+
+    const userIDs = deletedUsers.map(u => u.userID);
+    if (userIDs.length > 0) {
+      const { SaveDatas } = require('./SaveDatas');
+
+      await SaveDatas.updateMany(
+        {
+          $or: [
+            { likes: { $in: userIDs } },
+            { dislikes: { $in: userIDs } }
+          ]
+        },
+        {
+          $pull: {
+            likes: { $in: userIDs },
+            dislikes: { $in: userIDs }
+          }
+        }
+      );
+
+      const { Games } = require('./Games');
+      await Games.updateMany(
+        {
+          $or: [
+            { userFav: { $in: userIDs } }
+          ]
+        },
+        {
+          $pull: {
+            userFav: { $in: userIDs }
+          }
+        }
+      );
+
+      await this.model.updateMany(
+        {
+          $or: [
+            { followers: { $in: userIDs } },
+            { following: { $in: userIDs } }
+          ]
+        },
+        {
+          $pull: {
+            followers: { $in: userIDs },
+            following: { $in: userIDs }
+          }
+        }
+      );
+    }
   } catch (fsErr) {
-    console.error('error wiping user data:', fsErr);
+    console.error('Error wiping user data:', fsErr);
+  } finally {
+    deletedUsers = [];
   }
 });
+
+
 
 const Users = mongoose.models.Users || mongoose.model('Users', UserSchema);
 module.exports = { Users };

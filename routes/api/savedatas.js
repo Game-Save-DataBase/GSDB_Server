@@ -8,6 +8,7 @@ const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { SaveDatas } = require('../../models/SaveDatas');
 const { Games } = require('../../models/Games');
+const { Users } = require('../../models/Users');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config')
@@ -171,6 +172,83 @@ router.put('/', authenticateMW, async (req, res) => {
   }
 });
 
+router.put('/update-rating', authenticateMW, async (req, res) => {
+  try {
+    const { id, mode } = req.query;
+    const userID = req.user.userID;
+
+    if (!id || !['like', 'dislike'].includes(mode)) {
+      return httpResponses.badRequest(res, 'Missing or invalid "id" or "mode" in query');
+    }
+
+    const savedata = await findByID({ id }, 'savedata');
+    if (!savedata) return httpResponses.notFound(res, 'Savedata not found');
+
+    // Accedemos directamente
+    const alreadyLiked = savedata.likes.includes(userID);
+    const alreadyDisliked = savedata.dislikes.includes(userID);
+
+    // Añadir al array correspondiente si no está
+    if (mode === 'like' && !alreadyLiked) {
+      savedata.likes.push(userID);
+      req.user.likes.push(savedata.saveID)
+    } else if (mode === 'dislike' && !alreadyDisliked) {
+      savedata.dislikes.push(userID);
+      req.user.dislikes.push(savedata.saveID)
+    }
+
+    // Quitar del otro array si estaba
+    if (mode === 'like' && alreadyDisliked) {
+      savedata.dislikes = savedata.dislikes.filter(uid => uid !== userID);
+      req.user.dislikes = req.user.dislikes.filter(sid => sid !== savedata.saveID);
+    } else if (mode === 'dislike' && alreadyLiked) {
+      savedata.likes = savedata.likes.filter(uid => uid !== userID);
+      req.user.likes = req.user.likes.filter(sid => sid !== savedata.saveID);
+    }
+
+    await savedata.save();
+    await req.user.save();
+
+    return httpResponses.ok(res, {
+      msg: `Savedata "${mode}"d successfully`,
+      likes: savedata.likes.length,
+      dislikes: savedata.dislikes.length,
+    });
+  } catch (err) {
+    console.error('Error updating rating:', err);
+    return httpResponses.internalError(res, 'Failed to update rating');
+  }
+});
+
+router.put('/reset-rating', authenticateMW, async (req, res) => {
+  const { id } = req.query;
+
+  const savedata = await findByID({ id }, 'savedata');
+  if (!savedata) return httpResponses.notFound(res, 'Savedata not found');
+
+  try {
+    // Quitar del otro array si estaba
+    savedata.likes = savedata.likes.filter(uid => uid !== req.user.userID);
+    savedata.dislikes = savedata.dislikes.filter(uid => uid !== req.user.userID);
+    req.user.likes = req.user.likes.filter(sid => sid !== savedata.saveID);
+    req.user.dislikes = req.user.dislikes.filter(sid => sid !== savedata.saveID);
+
+
+    await savedata.save();
+    await req.user.save();
+
+    return httpResponses.ok(res, {
+      msg: `Savedata likes and dislikes reseted successfully for userID ${req.user.userID}`,
+      likes: savedata.likes.length,
+      dislikes: savedata.dislikes.length,
+    });
+  } catch (err) {
+    console.error('Error updating rating:', err);
+    return httpResponses.internalError(res, 'Failed to update rating');
+  }
+});
+
+
 router.delete('/', authenticateMW, async (req, res) => {
   try {
     const { id } = req.query;
@@ -197,7 +275,7 @@ router.delete('/', authenticateMW, async (req, res) => {
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const result = await SaveDatas.deleteMany({});
-    await Games.updateMany({}, { $set: { nUploads: 0, lastUpdate: null} });
+    await Games.updateMany({}, { $set: { nUploads: 0, lastUpdate: null } });
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     console.error('Error wiping saves:', err);

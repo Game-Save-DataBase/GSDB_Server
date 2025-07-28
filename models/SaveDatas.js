@@ -10,38 +10,77 @@ const config = require('../utils/config');
 const fs = require('fs/promises');
 const path = require('path');
 const uploadsBasePath = path.join(__dirname, '..', config.paths.uploads);
+const { Comments } = require('./Comments'); 
 
 const SavesSchema = new mongoose.Schema({
-    userID: { type: Number, required: true },       //id del usuario registrado que ha realizado la subida
-    gameID: { type: Number, required: true },       //ID al juego en nuestra base de datos
-    platformID: { type: Number, required: true },   //ID a una plataforma en nuestra base de datos 
-    file: { type: String, default: "" },   //nombre del archivo en el servidor
-    fileSize: { type: Number, default: 0 },   //tamaño en bytes
-    private: { type: Boolean, default: false },    //indica si es un archivo que no se verá por el resto de usuarios
-    title: { type: String, required: true, default: "Archivo de guardado" }, //nombre del archivo que se mostrará
-    description: { type: String, default: "" },    //descripcion del archivo
-    postedDate: { type: Date, default: Date.now },    // to do: meter un last update date
-    nDownloads: { type: Number, default: 0 },
-    rating: { type: Number, default: 0 }, //valoracion del save
-    tags: { type: [String], required: false } // ids de las tag asociadas a este save
+  userID: { type: Number, required: true },       //id del usuario registrado que ha realizado la subida
+  gameID: { type: Number, required: true },       //ID al juego en nuestra base de datos
+  platformID: { type: Number, required: true },   //ID a una plataforma en nuestra base de datos 
+  file: { type: String, default: "" },   //nombre del archivo en el servidor
+  fileSize: { type: Number, default: 0 },   //tamaño en bytes
+  private: { type: Boolean, default: false },    //indica si es un archivo que no se verá por el resto de usuarios
+  title: { type: String, required: true, default: "Archivo de guardado" }, //nombre del archivo que se mostrará
+  description: { type: String, default: "" },    //descripcion del archivo
+  postedDate: { type: Date, default: Date.now },    // to do: meter un last update date
+  nDownloads: { type: Number, default: 0 },
+  likes: { type: [Number], default: [] }, //array de userID unicos
+  dislikes: { type: [Number], default: [] }, //array de userID unicos
+  rating: { type: Number, default: 0 }, //valor ponderado calculado a traves de los likes y dislikes
+  tags: { type: [String], required: false } // ids de las tag asociadas a este save
 });
 SavesSchema.plugin(AutoIncrement, { inc_field: 'saveID', start_seq: 0 });
-SavesSchema.pre('deleteOne', { document: false, query: true }, async function(next) {
-  this._docToDelete = await this.model.findOne(this.getFilter()).lean();
+
+let saveToDelete = null;
+SavesSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
+  try {
+    saveToDelete = await this.model.findOne(this.getFilter(), 'saveID').lean();
+  } catch (err) {
+    console.error('Error fetching save in pre deleteOne:', err);
+    saveToDelete = null;
+  }
   next();
 });
 
-SavesSchema.post('deleteOne', { document: false, query: true }, async function() {
-  const doc = this._docToDelete;
-  if (!doc) return; 
+SavesSchema.post('deleteOne', { document: false, query: true }, async function () {
+  if (!saveToDelete) return;
 
-  const saveDir = path.join(uploadsBasePath, String(doc.saveID));
+  const saveDir = path.join(uploadsBasePath, String(saveToDelete.saveID));
 
   try {
     await fs.rm(saveDir, { recursive: true, force: true });
+
+    const { Users } = require('./Users');
+
+    await Users.updateMany(
+      { $or: [{ likes: saveToDelete.saveID }, { dislikes: saveToDelete.saveID }] },
+      {
+        $pull: {
+          likes: saveToDelete.saveID,
+          dislikes: saveToDelete.saveID,
+          uploads: saveToDelete.saveID
+        }
+      }
+    );
+    await Comments.deleteMany({ saveID: saveToDelete.saveID });
   } catch (err) {
-    console.error(`Error deleting data for saveID ${doc.saveID}:`, err);
+    console.error(`Error deleting data for saveID ${saveToDelete.saveID}:`, err);
+  } finally {
+    saveToDelete = null;
   }
+});
+
+
+let saveIDsToDelete = [];
+
+SavesSchema.pre('deleteMany', async function (next) {
+  try {
+    const docsToDelete = await this.model.find(this.getFilter(), 'saveID').lean();
+    saveIDsToDelete = docsToDelete.map(doc => doc.saveID);
+  } catch (err) {
+    console.error('Error capturando saveIDs en pre deleteMany:', err);
+    saveIDsToDelete = [];
+  }
+  next();
 });
 
 SavesSchema.post('deleteMany', async function () {
@@ -53,11 +92,94 @@ SavesSchema.post('deleteMany', async function () {
       .map(dirent => fs.rm(path.join(uploadsBasePath, dirent.name), { recursive: true, force: true }));
 
     await Promise.all(deletions);
+
+    if (saveIDsToDelete.length > 0) {
+      const { Users } = require('./Users');
+
+      console.log('SaveIDs eliminados:', saveIDsToDelete);
+
+      await Users.updateMany(
+        { $or: [{ likes: { $in: saveIDsToDelete } }, { dislikes: { $in: saveIDsToDelete } }] },
+        {
+          $pull: {
+            likes: { $in: saveIDsToDelete },
+            dislikes: { $in: saveIDsToDelete },
+            uploads: { $in: saveIDsToDelete }
+          }
+        }
+      );
+
+      await Comments.deleteMany({ saveID: { $in: saveIDsToDelete } });
+    }
   } catch (fsErr) {
     console.error('error wiping savefile data:', fsErr);
   }
 });
 
-const SaveDatas =  mongoose.models.SaveDatas || mongoose.model('savedatas', SavesSchema);
+let prevLikes = [];
+let prevDislikes = [];
+// Función de puntuación Wilson
+function wilsonScore(likesCount, dislikesCount, z = 1.96) {
+  const n = likesCount + dislikesCount;
+  if (n === 0) return 0;
+  const p = likesCount / n;
+  const denominator = 1 + (z ** 2) / n;
+  const centre = p + (z ** 2) / (2 * n);
+  const margin = z * Math.sqrt((p * (1 - p) + (z ** 2) / (4 * n)) / n);
+  const lowerBound = (centre - margin) / denominator;
+  return lowerBound * 100;
+}
+
+// Pre-save: guardar arrays anteriores
+SavesSchema.pre('save', async function (next) {
+  if (!this.isModified('likes') && !this.isModified('dislikes')) {
+    return next();
+  }
+
+  try {
+    if (!this.isNew) {
+      const existing = await this.constructor.findById(this._id).lean();
+      prevLikes = existing?.likes || [];
+      prevDislikes = existing?.dislikes || [];
+    } else {
+      prevLikes = [];
+      prevDislikes = [];
+    }
+  } catch (err) {
+    console.error('Error fetching previous likes/dislikes:', err);
+  }
+
+  next();
+});
+
+// Post-save: comparar y actualizar el rating
+SavesSchema.post('save', async function (doc, next) {
+  const likesChanged =
+    prevLikes.length !== doc.likes.length ||
+    !prevLikes.every(id => doc.likes.includes(id));
+
+  const dislikesChanged =
+    prevDislikes.length !== doc.dislikes.length ||
+    !prevDislikes.every(id => doc.dislikes.includes(id));
+
+  if (likesChanged || dislikesChanged) {
+    const likesCount = doc.likes.length;
+    const dislikesCount = doc.dislikes.length;
+    const newRating = wilsonScore(likesCount, dislikesCount);
+
+    if (doc.rating !== newRating) {
+      try {
+        await doc.constructor.findByIdAndUpdate(doc._id, { rating: newRating });
+      } catch (err) {
+        console.error('Error updating rating:', err);
+      }
+    }
+  }
+
+  next();
+});
+
+
+const SaveDatas = mongoose.models.SaveDatas || mongoose.model('savedatas', SavesSchema);
 
 module.exports = { SaveDatas };
