@@ -90,6 +90,7 @@ async function processSaveFileUpload({ file, user, body }) {
   fs.unlinkSync(file.path);
 
   tempSaveData.file = finalFileName;
+  tempSaveData.fileSize = file.size;
   await tempSaveData.save();
 
   return tempSaveData;
@@ -196,7 +197,7 @@ router.delete('/', authenticateMW, async (req, res) => {
 router.delete('/dev/wipe', blockIfNotDev, async (req, res) => {
   try {
     const result = await SaveDatas.deleteMany({});
-    await Games.updateMany({}, { $set: { nUploads: 0 } });
+    await Games.updateMany({}, { $set: { nUploads: 0, lastUpdate: null} });
     return httpResponses.ok(res, { deletedCount: result.deletedCount });
   } catch (err) {
     console.error('Error wiping saves:', err);

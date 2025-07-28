@@ -15,7 +15,8 @@ const SavesSchema = new mongoose.Schema({
     userID: { type: Number, required: true },       //id del usuario registrado que ha realizado la subida
     gameID: { type: Number, required: true },       //ID al juego en nuestra base de datos
     platformID: { type: Number, required: true },   //ID a una plataforma en nuestra base de datos 
-    file: { type: String, default: "" },   //ruta en el servidor donde se guarda el archivo
+    file: { type: String, default: "" },   //nombre del archivo en el servidor
+    fileSize: { type: Number, default: 0 },   //tamaño en bytes
     private: { type: Boolean, default: false },    //indica si es un archivo que no se verá por el resto de usuarios
     title: { type: String, required: true, default: "Archivo de guardado" }, //nombre del archivo que se mostrará
     description: { type: String, default: "" },    //descripcion del archivo
