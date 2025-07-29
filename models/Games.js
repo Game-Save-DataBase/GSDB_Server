@@ -8,6 +8,9 @@
  * */
 const config = require('../utils/config');
 const { sendNotification } = require('../scripts/sendNotification');
+const { SaveDatas } = require('./SaveDatas');
+const { Users } = require('./Users');
+let gamesToDelete = [];
 
 const mongoose = require('mongoose');
 
@@ -78,6 +81,59 @@ GameSchema.post('save', async function (doc, next) {
         next(err);
     }
 });
+
+GameSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
+    try {
+        const game = await this.model.findOne(this.getFilter(), 'gameID').lean();
+        gamesToDelete = game ? [game.gameID] : [];
+    } catch (err) {
+        console.error('Error capturando gameID en pre deleteOne:', err);
+        gamesToDelete = [];
+    }
+    next();
+});
+
+GameSchema.pre('deleteMany', async function (next) {
+    try {
+        const games = await this.model.find(this.getFilter(), 'gameID').lean();
+        gamesToDelete = games.map(g => g.gameID);
+    } catch (err) {
+        console.error('Error capturando gameIDs en pre deleteMany:', err);
+        gamesToDelete = [];
+    }
+    next();
+});
+
+// ---------- ELIMINAR DATOS RELACIONADOS ----------
+async function handleGameDeletion() {
+    if (!gamesToDelete.length) return;
+
+    try {
+        // 1. Eliminar todos los saves asociados a estos gameID
+        await SaveDatas.deleteMany({ gameID: { $in: gamesToDelete } });
+
+        // 2. Eliminar gameIDs de favGames en Users
+        await Users.updateMany(
+            { favGames: { $in: gamesToDelete } },
+            { $pull: { favGames: { $in: gamesToDelete } } }
+        );
+
+        console.log(`Juegos eliminados: ${gamesToDelete.join(', ')} y datos asociados limpiados.`);
+    } catch (err) {
+        console.error('Error eliminando datos asociados a gameID:', err);
+    } finally {
+        gamesToDelete = [];
+    }
+}
+
+GameSchema.post('deleteOne', { document: false, query: true }, async function () {
+    await handleGameDeletion();
+});
+
+GameSchema.post('deleteMany', async function () {
+    await handleGameDeletion();
+});
+
 
 
 const Games = mongoose.models.Games || mongoose.model('games', GameSchema);

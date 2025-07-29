@@ -23,7 +23,9 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },  //estara encriptada
   admin: { type: Boolean, default: false },       //indica si es un usuario con privilegios
   verified: { type: Boolean, default: false },    //indica si es un usuario verificado
-  rating: { type: Number, default: 0 },             //valoracion del usuario 
+  trusted: { type: Boolean, default: false },    //indica si es un confiable (buen rating)
+  banned: { type: Boolean, default: false },    //bloqueos permanentes
+  softban: { type: Boolean, default: false },    //bloqueos no permanentes o penalizaciones
   favGames: { type: [Number], default: [] },    //lista de juegos marcados como favoritos
   favSaves: { type: [Number], default: [] },    //lista de archivos marcados como favoritos
   following: { type: [Number], default: [] },   //lista de usuarios a los que sigue
@@ -33,7 +35,9 @@ const UserSchema = new mongoose.Schema({
   downloadHistory: { type: [String], default: [] },  //historial de descargas del usuario
   likes: { type: [Number], default: [] }, //array de saveID unicos
   dislikes: { type: [Number], default: [] }, //array de saveID unicos
-  rating: { type: Number, default: 0 }, //valor ponderado calculado a traves de los likes y dislikes
+  nLikes: { type: Number, default: 0 },     // total acumulado de likes recibidos en todos sus saves
+  nDislikes: { type: Number, default: 0 },  // total acumulado de dislikes recibidos en todos sus saves
+  rating: { type: Number, default: 0 },     // rating ponderado del usuario
   notifications: { //notificaciones
     type: [
       {
@@ -64,6 +68,20 @@ UserSchema.statics.findByIdentifier = async function (identifier) {
     ]
   });
 };
+
+//para el calculo del rating
+function wilsonScore(likesCount, dislikesCount, z = 1.96) {
+  const n = likesCount + dislikesCount;
+  if (n === 0) return 0;
+  const p = likesCount / n;
+  const denominator = 1 + (z ** 2) / n;
+  const centre = p + (z ** 2) / (2 * n);
+  const margin = z * Math.sqrt((p * (1 - p) + (z ** 2) / (4 * n)) / n);
+  const lowerBound = (centre - margin) / denominator;
+  return lowerBound * 100;
+}
+
+
 let previousFollowers = null;
 let createFolder = false;
 // comportamientos antes de guardar
@@ -112,8 +130,16 @@ UserSchema.pre('save', async function (next) {
       if (original !== this.userName) {
         console.log(`Normalizado userName: ${original} -> ${this.userName}`);
       }
+    } if (this.isModified('admin')){
+      this.verified = true; this.banned = false; this.softban = false; this.trusted=true;
     }
-    if (this.isModified('followers')) {
+    if (this.isModified('verified')){
+      this.trusted = (this.rating >= 80 && !this.banned && !this.softban) || (this.verified);
+    }
+     if (this.isModified('nLikes') || this.isModified('nDislikes')) {
+      this.rating = wilsonScore(this.nLikes, this.nDislikes);
+      this.trusted = (this.rating >= 80 && !this.banned && !this.softban) || this.verified;
+    } if (this.isModified('followers')) {
       try {
         const previous = await this.constructor.findById(this._id).lean();
         previousFollowers = previous?.followers || [];
@@ -129,7 +155,7 @@ UserSchema.pre('save', async function (next) {
   } catch (err) {
     next(err);
   }
-  
+
 });
 
 UserSchema.post('save', async function (doc, next) {
@@ -146,11 +172,11 @@ UserSchema.post('save', async function (doc, next) {
         }
       }
     }
-    
-    
+
+
     // No hay cambios en followers, no hacer nada
     if (!previousFollowers) return next();
-    
+
     const currentFollowers = doc.followers || [];
     const newFollowers = currentFollowers.filter(id => !previousFollowers.includes(id));
 
@@ -159,14 +185,14 @@ UserSchema.post('save', async function (doc, next) {
     for (const followerID of newFollowers) {
       const followerUser = await this.constructor.findOne({ userID: followerID }).lean();
       if (!followerUser) continue;
-      
+
       await sendNotification({
         userIDs: [doc.userID],
         type: 1,
         args: { followerUser }
       });
     }
-    
+
     next();
   } catch (err) {
     console.error('Error in Users post-save hook:', err);

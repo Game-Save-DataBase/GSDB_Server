@@ -99,7 +99,6 @@ async function processSaveFileUpload({ file, user, body }) {
 
 
 async function updateGameAfterUpload(gameID, saveID) {
-  console.log("updating game after upload")
   let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`);
   if (!game.data) {
     //lo creamos

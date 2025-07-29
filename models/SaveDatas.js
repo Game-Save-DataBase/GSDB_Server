@@ -10,7 +10,7 @@ const config = require('../utils/config');
 const fs = require('fs/promises');
 const path = require('path');
 const uploadsBasePath = path.join(__dirname, '..', config.paths.uploads);
-const { Comments } = require('./Comments'); 
+const { Comments } = require('./Comments');
 
 const SavesSchema = new mongoose.Schema({
   userID: { type: Number, required: true },       //id del usuario registrado que ha realizado la subida
@@ -50,6 +50,16 @@ SavesSchema.post('deleteOne', { document: false, query: true }, async function (
     await fs.rm(saveDir, { recursive: true, force: true });
 
     const { Users } = require('./Users');
+    // Restar likes y dislikes al dueño del save
+    const user = await Users.findOne({ userID: saveToDelete.userID });
+    if (user) {
+      console.log("borrando likes y dislikes")
+      user.nLikes -= saveToDelete.likes.length;
+      user.nDislikes -= saveToDelete.dislikes.length;
+      if (user.nLikes < 0) user.nLikes = 0;
+      if (user.nDislikes < 0) user.nDislikes = 0;
+      await user.save(); // recalcula rating
+    }
 
     await Users.updateMany(
       { $or: [{ likes: saveToDelete.saveID }, { dislikes: saveToDelete.saveID }] },
@@ -76,9 +86,12 @@ SavesSchema.pre('deleteMany', async function (next) {
   try {
     const docsToDelete = await this.model.find(this.getFilter(), 'saveID').lean();
     saveIDsToDelete = docsToDelete.map(doc => doc.saveID);
+    // Guardamos también para ajuste de contadores
+    this._savesDataToAdjust = docsToDelete;
   } catch (err) {
     console.error('Error capturando saveIDs en pre deleteMany:', err);
     saveIDsToDelete = [];
+    this._savesDataToAdjust = [];
   }
   next();
 });
@@ -96,7 +109,18 @@ SavesSchema.post('deleteMany', async function () {
     if (saveIDsToDelete.length > 0) {
       const { Users } = require('./Users');
 
-      console.log('SaveIDs eliminados:', saveIDsToDelete);
+      // Ajustar contadores de cada usuario propietario
+      for (const save of this._savesDataToAdjust) {
+        const user = await Users.findOne({ userID: save.userID });
+        if (user) {
+          console.log("borrando likes y dislikes")
+          user.nLikes -= save.likes.length;
+          user.nDislikes -= save.dislikes.length;
+          if (user.nLikes < 0) user.nLikes = 0;
+          if (user.nDislikes < 0) user.nDislikes = 0;
+          await user.save();
+        }
+      }
 
       await Users.updateMany(
         { $or: [{ likes: { $in: saveIDsToDelete } }, { dislikes: { $in: saveIDsToDelete } }] },
@@ -118,17 +142,6 @@ SavesSchema.post('deleteMany', async function () {
 
 let prevLikes = [];
 let prevDislikes = [];
-// Función de puntuación Wilson
-function wilsonScore(likesCount, dislikesCount, z = 1.96) {
-  const n = likesCount + dislikesCount;
-  if (n === 0) return 0;
-  const p = likesCount / n;
-  const denominator = 1 + (z ** 2) / n;
-  const centre = p + (z ** 2) / (2 * n);
-  const margin = z * Math.sqrt((p * (1 - p) + (z ** 2) / (4 * n)) / n);
-  const lowerBound = (centre - margin) / denominator;
-  return lowerBound * 100;
-}
 
 // Pre-save: guardar arrays anteriores
 SavesSchema.pre('save', async function (next) {
@@ -151,9 +164,9 @@ SavesSchema.pre('save', async function (next) {
 
   next();
 });
-
-// Post-save: comparar y actualizar el rating
 SavesSchema.post('save', async function (doc, next) {
+  const { Users } = require('./Users');
+
   const likesChanged =
     prevLikes.length !== doc.likes.length ||
     !prevLikes.every(id => doc.likes.includes(id));
@@ -163,21 +176,27 @@ SavesSchema.post('save', async function (doc, next) {
     !prevDislikes.every(id => doc.dislikes.includes(id));
 
   if (likesChanged || dislikesChanged) {
-    const likesCount = doc.likes.length;
-    const dislikesCount = doc.dislikes.length;
-    const newRating = wilsonScore(likesCount, dislikesCount);
+    try {
+      const user = await Users.findOne({ userID: doc.userID });
 
-    if (doc.rating !== newRating) {
-      try {
-        await doc.constructor.findByIdAndUpdate(doc._id, { rating: newRating });
-      } catch (err) {
-        console.error('Error updating rating:', err);
+      if (likesChanged) {
+        const diff = doc.likes.length - prevLikes.length;
+        user.nLikes += diff;
       }
+      if (dislikesChanged) {
+        const diff = doc.dislikes.length - prevDislikes.length;
+        user.nDislikes += diff;
+      }
+
+      await user.save(); // aquí se recalcula el rating del usuario
+    } catch (err) {
+      console.error('Error actualizando likes/dislikes en usuario:', err);
     }
   }
 
   next();
 });
+
 
 
 const SaveDatas = mongoose.models.SaveDatas || mongoose.model('savedatas', SavesSchema);
