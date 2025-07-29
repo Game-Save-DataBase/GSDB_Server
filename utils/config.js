@@ -12,7 +12,7 @@ const config = {
     isDevMode: process.env.DEV_MODE === 'true',
     apiVersion: process.env.API_VERSION,
     connection: DIR_GSDB, //conexion: es decir, la ruta del servidor, en este caso localhost.
-    allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co','https://gsdb-server.onrender.com'],
+    allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co','https://gsdb-web.onrender.com'],
     refreshInterval: process.env.REFRESH_INTERVAL,
     //directorios utiles
     paths: {
