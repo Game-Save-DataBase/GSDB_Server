@@ -3,7 +3,7 @@
 require('dotenv').config();
 
 const isProd = process.env.PROD_MODE === 'true';
-const DIR_GSDB = isProd ? process.env.DIR_GSDB_PROD : process.env.DIR_GSDB;
+const DIR_GSDB = isProd ? process.env.DIR_GSDB_PROD : process.env.DIR_GSDB+process.env.PORT;
 
 const config = {
     port: process.env.PORT,
@@ -11,8 +11,8 @@ const config = {
     secretKey: process.env.SECRET_KEY,
     isDevMode: process.env.DEV_MODE === 'true',
     apiVersion: process.env.API_VERSION,
-    connection: DIR_GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
-    allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co'],
+    connection: DIR_GSDB, //conexion: es decir, la ruta del servidor, en este caso localhost.
+    allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co','https://gsdb-server.onrender.com'],
     refreshInterval: process.env.REFRESH_INTERVAL,
     //directorios utiles
     paths: {
