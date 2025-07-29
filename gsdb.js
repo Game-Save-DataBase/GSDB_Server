@@ -102,7 +102,7 @@ connectDB()
 
     // Primero arranca el servidor
     app.listen(port, async () => {
-      console.log(`Server running on port ${port}`);
+      console.log('Server running on port ${port}');
 
       // Después llama a refreshIGDB
       try {
