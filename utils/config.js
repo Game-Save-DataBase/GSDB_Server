@@ -2,13 +2,16 @@
 
 require('dotenv').config();
 
+const isProd = process.env.PROD_MODE === 'true';
+const DIR_GSDB = isProd ? process.env.DIR_GSDB_PROD : process.env.DIR_GSDB;
+
 const config = {
     port: process.env.PORT,
     mongoUri: process.env.MONGO_URI,
     secretKey: process.env.SECRET_KEY,
     isDevMode: process.env.DEV_MODE === 'true',
     apiVersion: process.env.API_VERSION,
-    connection: process.env.DIR_GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
+    connection: DIR_GSDB+process.env.PORT, //conexion: es decir, la ruta del servidor, en este caso localhost.
     allowedOrigins: ['http://localhost:3000', 'http://localhost:5173', 'https://web.postman.co'],
     refreshInterval: process.env.REFRESH_INTERVAL,
     //directorios utiles
