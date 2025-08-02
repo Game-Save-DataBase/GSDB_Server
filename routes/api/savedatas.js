@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const router = express.Router();
 const archiver = require('archiver');
-const { uploadSaveFile } = require('../../config/multer');
+const { uploadSaveDataFiles } = require('../../config/multer');
 const authenticateMW = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { SaveDatas } = require('../../models/SaveDatas');
@@ -54,8 +54,8 @@ router.get('/', async (req, res) => {
 
 
 
-async function processSaveFileUpload({ file, user, body }) {
-  if (!file) throw new Error('No file uploaded');
+async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
+  if (!file) throw new Error('No savefile uploaded');
 
   const { gameID, tags, platformID, title, description } = body;
   const tagsArray = Array.isArray(tags) ? tags : [tags];
@@ -65,17 +65,16 @@ async function processSaveFileUpload({ file, user, body }) {
   const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
   if (!game) throw new Error('Game not found');
 
-  // Crear entry temporal en DB para obtener el id (saveID)
   const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
   const saveID = tempSaveData.saveID.toString();
-  const finalFileName = `gsdb_${saveID}${user.userID}${game.data.gameID}.zip`;
   const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID);
   if (!fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath, { recursive: true });
   }
 
+  // Guardar savefile como zip
+  const finalFileName = `gsdb_${saveID}${user.userID}${game.data.gameID}.zip`;
   const finalFilePath = path.join(uploadPath, finalFileName);
-
   await new Promise((resolve, reject) => {
     const output = fs.createWriteStream(finalFilePath);
     const archive = archiver('zip', { zlib: { level: 9 } });
@@ -87,8 +86,28 @@ async function processSaveFileUpload({ file, user, body }) {
     archive.file(file.path, { name: file.originalname });
     archive.finalize();
   });
-
   fs.unlinkSync(file.path);
+  // Mover capturas si hay
+  const screenshotNames = [];
+  const scrFolder = path.join(uploadPath, "scr");
+
+  // Crear carpeta "scr" si no existe
+  if (!fs.existsSync(scrFolder)) {
+    fs.mkdirSync(scrFolder, { recursive: true });
+  }
+
+  // Quitar la extensión .zip de finalFileName
+  const baseName = finalFileName.replace(/\.zip$/i, "");
+  let counter = 1;
+  for (const shot of screenshots) {
+    const newName = `scr${String(counter).padStart(2, "0")}_${baseName}${path.extname(shot.filename)}`;
+    // Ruta de destino
+    const destPath = path.join(scrFolder, newName);
+    fs.renameSync(shot.path, destPath);
+    screenshotNames.push(newName);
+    counter++;
+  }
+
 
   tempSaveData.file = finalFileName;
   tempSaveData.fileSize = file.size;
@@ -121,12 +140,16 @@ async function updateUserAfterUpload(loggedUser, saveID) {
   }
 }
 
-router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res) => {
+router.post('/', authenticateMW, uploadSaveDataFiles.fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'screenshots', maxCount: 4 }
+]), async (req, res) => {
   try {
     const savedata = await processSaveFileUpload({
-      file: req.file,
+      file: req.files?.file?.[0],
       user: req.user,
-      body: req.body
+      body: req.body,
+      screenshots: req.files?.screenshots || []
     });
 
     await updateGameAfterUpload(req.body.gameID, savedata.saveID)
@@ -135,13 +158,18 @@ router.post('/', authenticateMW, uploadSaveFile.single('file'), async (req, res)
     return httpResponses.created(res, savedata);
   } catch (err) {
     console.error("Error saving savedata:", err);
-
-    // Intentar borrar archivo original si aún existe
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      try {
-        fs.unlinkSync(req.file.path);
-      } catch (unlinkErr) {
-        console.error("Error deleting uploaded file after failure:", unlinkErr);
+    // Borrar cualquier archivo subido si falla
+    const allFiles = [
+      ...(req.files?.file || []),
+      ...(req.files?.screenshots || [])
+    ];
+    for (const f of allFiles) {
+      if (f?.path && fs.existsSync(f.path)) {
+        try {
+          fs.unlinkSync(f.path);
+        } catch (unlinkErr) {
+          console.error("Error deleting uploaded file after failure:", unlinkErr);
+        }
       }
     }
 

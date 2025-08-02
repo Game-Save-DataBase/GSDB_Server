@@ -57,6 +57,33 @@ router.get('/savedata/:id/scr', async (req, res) => {
   const fileName = findFirstZip(folderPath) || `${req.params.id}.zip`;
   createZipAndSend(res, scrPath, `screenshots-${fileName}`);
 });
+// 3. Savefile main screenshot
+router.get('/savedata/:id/scr/main', async (req, res) => {
+  const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
+
+  if (!fs.existsSync(scrPath)) {
+    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
+  }
+
+  // Leer y ordenar archivos
+  const files = fs.readdirSync(scrPath)
+    .filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (files.length === 0) {
+    return httpResponses.notFound(res, `No screenshot files found for id ${req.params.id}`);
+  }
+
+  const firstScreenshotPath = path.join(scrPath, files[0]);
+
+  // Enviar la imagen directamente
+  res.sendFile(firstScreenshotPath, err => {
+    if (err) {
+      console.error("Error sending screenshot:", err);
+      return httpResponses.serverError(res, "Unable to send screenshot");
+    }
+  });
+});
 
 // 1. Savefile + screenshots
 router.get('/savedata/:id/bundle', async (req, res) => {
@@ -115,7 +142,7 @@ router.get('/savedata/:id', async (req, res) => {
 
   const filePath = path.join(folderPath, zipFile);
   // Buscar savedata y sumar numero de descargas
-  const saveEntry = await SaveDatas.findOne({ saveID: Number( req.params.id) });
+  const saveEntry = await SaveDatas.findOne({ saveID: Number(req.params.id) });
   saveEntry.nDownloads = saveEntry.nDownloads + 1
   await saveEntry.save();
   sendFileIfExists(res, filePath, zipFile);

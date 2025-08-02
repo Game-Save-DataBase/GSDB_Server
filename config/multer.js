@@ -3,22 +3,21 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 
-// Screenshots
+
+// Savefiles
 const screenshotStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const saveId = req.params.saveId;
-    const uploadPath = path.join(__dirname, '../' + config.paths.uploads, saveId);
+    const uploadPath = path.join(__dirname, '../', config.paths.uploads);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
     cb(null, uploadPath);
   },
   filename: (req, file, cb) => {
-    cb(null, `scr_${Date.now()}${path.extname(file.originalname)}`);
+    cb(null, `screenshot_${Date.now()}_${path.extname(file.originalname)}`);
   }
 });
 
-// Savefiles
 const saveFileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     const uploadPath = path.join(__dirname, '../', config.paths.uploads);
@@ -74,17 +73,26 @@ const fileFilterUserImage = (req, file, cb) => {
   cb(null, true);
 };
 
-
-const uploadScreenshot = multer({ storage: screenshotStorage });
-const uploadSaveFile = multer({
-  storage: saveFileStorage,
-  fileFilterUserImage,
-  limits: { fileSize: 5 * 1024 * 1024 }
+const uploadSaveDataFiles = multer({
+  storage: saveFileStorage, // por defecto, todos se guardan en la misma carpeta
+  limits: { fileSize: 20 * 1024 * 1024 }, // por ejemplo 20MB máx
+  fileFilter: (req, file, cb) => {
+    if (file.fieldname === 'file') {
+      return cb(null, true); // savefile
+    }
+    if (file.fieldname === 'screenshots') {
+      const allowed = ['.png', '.jpg', '.jpeg', '.webp'];
+      if (!allowed.includes(path.extname(file.originalname).toLowerCase())) {
+        return cb(new Error(`Screenshots must be ${allowed.join(', ')} `));
+      }
+      return cb(null, true);
+    }
+    cb(new Error('Invalid field'));
+  }
 });
 const uploadUserImage = multer({ storage: userImageStorage });
 
 module.exports = {
-  uploadScreenshot,
-  uploadSaveFile,
+  uploadSaveDataFiles ,
   uploadUserImage
 };
