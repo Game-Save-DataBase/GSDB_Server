@@ -53,8 +53,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-
-
 async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   if (!file) throw new Error('No savefile uploaded');
 
@@ -188,20 +186,27 @@ router.post('/', authenticateMW, uploadSaveDataFiles.fields([
 
 //Post async
 
-async function asyncProcessSaveFileUpload(file, user, body, saveID) {
+async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
   try {
+
+    if (!file) throw new Error('No savefile uploaded');
+
     const { gameID, tags, platformID, title, description } = body;
     const tagsArray = Array.isArray(tags) ? tags : [tags];
-    
-    const saveEntry = await SaveDatas.findOne({ saveID });
-    if (!saveEntry) throw new Error("Save entry not found");
+    const userID = user.userID;
 
-    // Ruta y nombre del archivo igual que en processSaveFileUpload
-    const finalFileName = `gsdb_${saveID}${user.userID}${gameID}.zip`;
+    if (!gameID) throw new Error('Missing gameID');
+    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
+    if (!game) throw new Error('Game not found');
+
+    const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
+    const saveID = tempSaveData.saveID.toString();
     const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
+
+    const finalFileName = `gsdb_${saveID}${user.userID}${gameID}.zip`;
     const finalFilePath = path.join(uploadPath, finalFileName);
 
     // Crear zip
@@ -231,19 +236,33 @@ async function asyncProcessSaveFileUpload(file, user, body, saveID) {
       return;
     }
 
-    // Archivo limpio: actualizar registro
-    saveEntry.file = finalFileName;
-    saveEntry.fileSize = file.size;
-    saveEntry.gameID = gameID;
-    saveEntry.platformID = platformID;
-    saveEntry.title = title;
-    saveEntry.description = description;
-    saveEntry.tags = tagsArray;
-
-    await saveEntry.save();
-
     // Limpiar archivo temporal original
     if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+    // Mover capturas si hay
+    const screenshotNames = [];
+    const scrFolder = path.join(uploadPath, "scr");
+
+    // Crear carpeta "scr" si no existe
+    if (!fs.existsSync(scrFolder)) {
+      fs.mkdirSync(scrFolder, { recursive: true });
+    }
+
+    // Quitar la extensión .zip de finalFileName
+    const baseName = finalFileName.replace(/\.zip$/i, "");
+    let counter = 1;
+    for (const shot of screenshots) {
+      const newName = `scr${String(counter).padStart(2, "0")}_${baseName}${path.extname(shot.filename)}`;
+      // Ruta de destino
+      const destPath = path.join(scrFolder, newName);
+      fs.renameSync(shot.path, destPath);
+      screenshotNames.push(newName);
+      counter++;
+    }
+    
+    tempSaveData.file = finalFileName;
+    tempSaveData.fileSize = file.size;
+    await tempSaveData.save();
 
     // Actualizar juego y usuario
     await updateGameAfterUpload(gameID, saveID);
@@ -263,35 +282,34 @@ async function asyncProcessSaveFileUpload(file, user, body, saveID) {
   }
 }
 
-router.post('/temp', authenticateMW, uploadSaveFile.single('file'), async (req, res) => {
+router.post('/temp', authenticateMW, uploadSaveDataFiles.fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'screenshots', maxCount: 4 }
+]), async (req, res) => {
   try {
-    if (!req.file) throw new Error('No file uploaded');
+    const file = req.files?.file?.[0];
+    if (!file) throw new Error('No file uploaded');
 
-    // Crear registro temporal con sólo userID, sin archivo ni info todavía
-    const tempSaveData = await SaveDatas.create({
-      userID: req.user.userID,
-      gameID: null,       // Pendiente, se actualizará en async
-      platformID: null,
-      title: 'Archivo de guardado', // Default
-      description: '',
-      tags: []
-    });
-
-    // Lanzar el proceso async sin await
-    asyncProcessSaveFileUpload(req.file, req.user, req.body, tempSaveData.saveID);
+    asyncProcessSaveFileUpload(file, req.user, req.body, req.files?.screenshots || []);
 
     // Responder rápido con éxito y redirigir al inicio en frontend
-    return httpResponses.ok(res, { msg: 'Proceso iniciado', saveID: tempSaveData.saveID });
+    return httpResponses.ok(res, { msg: 'Proceso iniciado' });
   } catch (err) {
     // Manejo error normal
     console.error("Error iniciando subida:", err);
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+    if (req.files?.file?.[0]?.path && fs.existsSync(req.files?.file?.[0]?.path)) {
+      fs.unlinkSync(req.files?.file?.[0]?.path);
+    }
+    if (req.files?.screenshots) {
+      for (const shot of req.files.screenshots) {
+        if (shot.path && fs.existsSync(shot.path)) {
+          fs.unlinkSync(shot.path);
+        }
+      }
     }
     return httpResponses.badRequest(res, err.message || 'No se pudo iniciar la subida');
   }
 });
-
 
 //
 
