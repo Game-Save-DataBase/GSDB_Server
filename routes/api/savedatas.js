@@ -13,6 +13,7 @@ const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config')
 const { hasStaticFields } = require('../../models/modelRegistry');
+const { scanFileWithVirusTotal, isFileMalicious } = require('../../utils/virusTotal');
 
 const axios = require('axios');
 
@@ -87,6 +88,14 @@ async function processSaveFileUpload({ file, user, body }) {
     archive.file(file.path, { name: file.originalname });
     archive.finalize();
   });
+
+  // VIRUSTOTAL
+  const vtReport = await scanFileWithVirusTotal(finalFilePath);
+  if (isFileMalicious(vtReport)) {
+    fs.unlinkSync(file.path); // elimina archivo original
+    fs.unlinkSync(finalFilePath); // elimina zip malicioso
+    throw new Error('Archivo malicioso detectado por VirusTotal. Subida cancelada.');
+  }
 
   fs.unlinkSync(file.path);
 

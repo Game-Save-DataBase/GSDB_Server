@@ -37,8 +37,12 @@ const config = {
         auth: process.env.API+process.env.API_AUTH,//localhost:PORT/api/auth
         tags: process.env.API+process.env.API_TAGS,//localhost:PORT/api/tags
         assets: process.env.API+process.env.API_ASSETS//localhost:PORT/api/assets
-    }
-
+    },
+    virusTotal: {
+        apiKey: process.env.VT_API_KEY,
+        scanUrl: 'https://www.virustotal.com/api/v3/files',
+        reportUrl: 'https://www.virustotal.com/api/v3/analyses/', // + analysis_id
+    },
     //posibilidad de crear funciones para conseguir la ruta de un save o de un usuario. por ejemplo,
     //getUserPfp(string userId){
     // return paths.users + '_bunchofnumbers'+'pfp.png'
