@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticateMW = require('../../middleware/authMW');
+const { authenticateMW, checkLoggedUserMW } = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const path = require('path');
 const fs = require('fs');
@@ -9,7 +9,7 @@ const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config');
 const axios = require('axios');
 const { SaveDatas } = require('../../models/SaveDatas');
-
+const { Users } = require('../../models/Users');
 
 const sendFileIfExists = (res, filePath, fileName) => {
   if (!fs.existsSync(filePath)) {
@@ -29,6 +29,21 @@ const createZipAndSend = (res, folderPath, zipName = 'archive.zip') => {
   archive.directory(folderPath, false);
   archive.finalize();
 };
+
+async function addSaveToUserHistory(loggedUser, saveId) {
+  // Si hay usuario logueado, añadir al historial
+  if (loggedUser) {
+    try {
+      await Users.findByIdAndUpdate(
+        loggedUser._id,
+        { $push: { downloadHistory: saveId } }
+      );
+    } catch (err) {
+      console.error("Error al actualizar downloadHistory:", err);
+    }
+  }
+
+}
 // Utilidad para encontrar el primer archivo .zip en un directorio (asumimos que será el save)
 const findFirstZip = (directoryPath) => {
   if (!fs.existsSync(directoryPath)) return null;
@@ -57,9 +72,39 @@ router.get('/savedata/:id/scr', async (req, res) => {
   const fileName = findFirstZip(folderPath) || `${req.params.id}.zip`;
   createZipAndSend(res, scrPath, `screenshots-${fileName}`);
 });
+// 3. Savefile main screenshot
+router.get('/savedata/:id/scr/main', async (req, res) => {
+  const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
+
+  if (!fs.existsSync(scrPath)) {
+    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
+  }
+
+  // Leer y ordenar archivos
+  const files = fs.readdirSync(scrPath)
+    .filter(f => /\.(png|jpg|jpeg|webp)$/i.test(f))
+    .sort((a, b) => a.localeCompare(b));
+
+  if (files.length === 0) {
+    return httpResponses.notFound(res, `No screenshot files found for id ${req.params.id}`);
+  }
+
+  const firstScreenshotPath = path.join(scrPath, files[0]);
+
+  // Enviar la imagen directamente
+  res.sendFile(firstScreenshotPath, err => {
+    if (err) {
+      console.error("Error sending screenshot:", err);
+      return httpResponses.serverError(res, "Unable to send screenshot");
+    }
+  });
+});
+
+
+
 
 // 1. Savefile + screenshots
-router.get('/savedata/:id/bundle', async (req, res) => {
+router.get('/savedata/:id/bundle', checkLoggedUserMW, async (req, res) => {
   const saveId = req.params.id;
   const savePath = path.join(uploadsBasePath, saveId);
   const scrPath = path.join(savePath, 'scr');
@@ -93,6 +138,7 @@ router.get('/savedata/:id/bundle', async (req, res) => {
     // Buscar savedata y sumar numero de descargas
     const saveEntry = await SaveDatas.findOne({ saveID: Number(saveId) });
     saveEntry.nDownloads = saveEntry.nDownloads + 1
+    addSaveToUserHistory(req.loggedUser, saveId);
     await saveEntry.save();
   }
 
@@ -105,7 +151,7 @@ router.get('/savedata/:id/bundle', async (req, res) => {
 });
 
 // 2. Savefile main file
-router.get('/savedata/:id', async (req, res) => {
+router.get('/savedata/:id', checkLoggedUserMW, async (req, res) => {
   const folderPath = path.join(uploadsBasePath, req.params.id);
   const zipFile = findFirstZip(folderPath);
 
@@ -115,8 +161,9 @@ router.get('/savedata/:id', async (req, res) => {
 
   const filePath = path.join(folderPath, zipFile);
   // Buscar savedata y sumar numero de descargas
-  const saveEntry = await SaveDatas.findOne({ saveID: Number( req.params.id) });
+  const saveEntry = await SaveDatas.findOne({ saveID: Number(req.params.id) });
   saveEntry.nDownloads = saveEntry.nDownloads + 1
+  addSaveToUserHistory(req.loggedUser, req.params.id);
   await saveEntry.save();
   sendFileIfExists(res, filePath, zipFile);
 });

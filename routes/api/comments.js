@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticateMW = require('../../middleware/authMW');
+const {authenticateMW} = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { Comments } = require('../../models/Comments');

@@ -67,7 +67,6 @@ router.post('/login', (req, res, next) => {
   if (req.isAuthenticated()) {
     return httpResponses.badRequest(res, 'Already authenticated. Log out to switch accounts.');
   }
-
   passport.authenticate('local', (err, user, info) => {
     if (err) return next(err);
     if (!user) return httpResponses.badRequest(res, info.message);

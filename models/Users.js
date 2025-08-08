@@ -27,7 +27,6 @@ const UserSchema = new mongoose.Schema({
   banned: { type: Boolean, default: false },    //bloqueos permanentes
   softban: { type: Boolean, default: false },    //bloqueos no permanentes o penalizaciones
   favGames: { type: [Number], default: [] },    //lista de juegos marcados como favoritos
-  favSaves: { type: [Number], default: [] },    //lista de archivos marcados como favoritos
   following: { type: [Number], default: [] },   //lista de usuarios a los que sigue
   followers: { type: [Number], default: [] },   //lista de usuarios que le siguen
   uploads: { type: [Number], default: [] },       //lista de archivos subidos por este usuario
