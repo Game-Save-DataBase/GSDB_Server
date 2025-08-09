@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {authenticateMW} = require('../../middleware/authMW');
+const { authenticateMW } = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { Users } = require('../../models/Users');
@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const config = require('../../utils/config');
 const axios = require('axios');
 const notificationTemplates = require('../../utils/notificationTemplates');
+const { SaveDatas } = require('../../models/SaveDatas');
 
 
 // Ruta de test, dev mode
@@ -113,59 +114,124 @@ router.post('/follow-toggle', authenticateMW, async (req, res) => {
   }
 });
 
-
-// POST /favorite-game-toggle
-router.post('/favorite-game-toggle', authenticateMW, async (req, res) => {
+router.post('/add-favorite', authenticateMW, async (req, res) => {
   try {
-
-    const { gameID, action } = req.body; // action: 'favorite' | 'unfavorite'
-    if (gameID === undefined || gameID === null) return httpResponses.badRequest(res, 'Missing gameID');
-    if (!['favorite', 'unfavorite'].includes(action)) {
-      return httpResponses.badRequest(res, 'Invalid action, must be "favorite" or "unfavorite"');
-    }
+    const { gameID, saveID } = req.body;
     const loggedUser = req.user;
 
-    const gameIDNum = Number(gameID);
-    let game = await Games.findOne({ gameID: Number(gameIDNum) });
-    if (!game) {
-      //si no existe, probamos a hacer un post
-      let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(gameIDNum) });
-      if (resPost.data.count <= 0) {
-        return httpResponses.notFound(res, `Game with gameID ${gameIDNum} or not follow GSDB criteria`);
-      }
-      game = await Games.findOne({ gameID: gameIDNum });
-    }
-    if (isNaN(gameIDNum)) {
-      return httpResponses.badRequest(res, 'gameID must be a valid number');
+    if (!gameID && !saveID) {
+      return httpResponses.badRequest(res, 'Missing gameID or saveID');
     }
 
-    const alreadyFavorite = loggedUser.favGames.includes(gameIDNum);
-    if (action === 'favorite') {
-      if (alreadyFavorite) {
-        return httpResponses.ok(res, { message: 'Game already in favorites' });
-      }
-      loggedUser.favGames.push(gameIDNum);
-      if (game.userFav.length === 0 || !game.userFav.includes(loggedUser.userID)) {
-        game.userFav.push(loggedUser.userID);
-      }
+    let messages = [];
 
-    } else if (action === 'unfavorite') {
-      if (!alreadyFavorite) {
-        return httpResponses.ok(res, { message: 'Game not in favorites' });
+    if (gameID) {
+      const gameIDNum = Number(gameID);
+      if (isNaN(gameIDNum)) {
+        return httpResponses.badRequest(res, 'gameID must be a valid number');
       }
-      loggedUser.favGames = loggedUser.favGames.filter(id => id !== gameIDNum);
-      game.userFav = game.userFav.filter(userId => userId !== loggedUser.userID);
+      let game = await Games.findOne({ gameID: gameIDNum });
+      if (!game) {
+        let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: gameIDNum });
+        if (resPost.data.count <= 0) {
+          return httpResponses.notFound(res, `Game with gameID ${gameIDNum} or not follow GSDB criteria`);
+        }
+        game = await Games.findOne({ gameID: gameIDNum });
+      }
+      if (!loggedUser.favGames.includes(gameIDNum)) {
+        loggedUser.favGames.push(gameIDNum);
+        if (!game.userFav.includes(loggedUser.userID)) {
+          game.userFav.push(loggedUser.userID);
+        }
+        await game.save();
+        messages.push('Game added to favorites successfully');
+      } else {
+        messages.push('Game already in favorites');
+      }
+    }
+
+    if (saveID) {
+      const saveIDNum = Number(saveID);
+      if (isNaN(saveIDNum)) {
+        return httpResponses.badRequest(res, 'saveID must be a valid number');
+      }
+      let save = await SaveDatas.findOne({ saveID: saveIDNum });
+      if (!save) {
+        return httpResponses.badRequest(res, `Save data with ID ${saveID} does not exist`);
+      }
+      if (!loggedUser.favSaves.includes(saveIDNum)) {
+        loggedUser.favSaves.push(saveIDNum);
+        messages.push('Save added to favorites successfully');
+      } else {
+        messages.push('Save already in favorites');
+      }
     }
 
     await loggedUser.save();
-    await game.save()
 
-    return httpResponses.ok(res, { message: `Game ${action}d successfully` });
-
+    return httpResponses.ok(res, { message: messages.join(' & ') });
   } catch (err) {
-    return httpResponses.internalError(res, `Error trying to ${req.body.action || 'favorite/unfavorite'} game`);
+    console.error(err);
+    return httpResponses.internalError(res, 'Error adding favorite');
   }
 });
+
+// POST /remove-favorite
+router.post('/remove-favorite', authenticateMW, async (req, res) => {
+  try {
+    const { gameID, saveID } = req.body;
+    const loggedUser = req.user;
+
+    if (!gameID && !saveID) {
+      return httpResponses.badRequest(res, 'Missing gameID or saveID');
+    }
+
+    let messages = [];
+
+    if (gameID) {
+      const gameIDNum = Number(gameID);
+      if (isNaN(gameIDNum)) {
+        return httpResponses.badRequest(res, 'gameID must be a valid number');
+      }
+
+      const game = await Games.findOne({ gameID: gameIDNum });
+
+      if (loggedUser.favGames.includes(gameIDNum)) {
+        loggedUser.favGames = loggedUser.favGames.filter(id => id !== gameIDNum);
+        if (game) {
+          game.userFav = game.userFav.filter(userId => userId !== loggedUser.userID);
+          await game.save();
+        }
+        messages.push('Game removed from favorites successfully');
+      } else {
+        messages.push('Game not in favorites');
+      }
+    }
+
+    if (saveID) {
+      const saveIDNum = Number(saveID);
+      if (isNaN(saveIDNum)) {
+        return httpResponses.badRequest(res, 'saveID must be a valid number');
+      }
+
+      if (loggedUser.favSaves.includes(saveIDNum)) {
+        loggedUser.favSaves = loggedUser.favSaves.filter(id => id !== saveIDNum);
+        messages.push('Save removed from favorites successfully');
+      } else {
+        messages.push('Save not in favorites');
+      }
+    }
+
+    await loggedUser.save();
+
+    return httpResponses.ok(res, { message: messages.join(' & ') });
+  } catch (err) {
+    console.error(err);
+    return httpResponses.internalError(res, 'Error removing favorite');
+  }
+});
+
+
 
 
 router.post('/updateImage', authenticateMW, (req, res) => {
@@ -185,7 +251,7 @@ router.post('/updateImage', authenticateMW, (req, res) => {
       return httpResponses.badRequest(res, errmes);
 
     }
-    return httpResponses.ok(res, { message: 'Image uploaded successfully'});
+    return httpResponses.ok(res, { message: 'Image uploaded successfully' });
   });
 });
 

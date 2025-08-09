@@ -67,7 +67,9 @@ SavesSchema.post('deleteOne', { document: false, query: true }, async function (
         $pull: {
           likes: saveToDelete.saveID,
           dislikes: saveToDelete.saveID,
-          uploads: saveToDelete.saveID
+          uploads: saveToDelete.saveID,
+          favSaves: saveToDelete.saveID,
+          downloadHistory: { $in: saveIDsToDelete }
         }
       }
     );
@@ -128,7 +130,9 @@ SavesSchema.post('deleteMany', async function () {
           $pull: {
             likes: { $in: saveIDsToDelete },
             dislikes: { $in: saveIDsToDelete },
-            uploads: { $in: saveIDsToDelete }
+            uploads: { $in: saveIDsToDelete },
+            favSaves: { $in: saveIDsToDelete },
+            downloadHistory: { $in: saveIDsToDelete }
           }
         }
       );
