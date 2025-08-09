@@ -88,7 +88,7 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   });
   fs.unlinkSync(file.path);
   // Mover capturas si hay
-  const screenshotNames = [];
+  // const screenshotNames = [];
   const scrFolder = path.join(uploadPath, "scr");
 
   // Crear carpeta "scr" si no existe
@@ -99,12 +99,13 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   // Quitar la extensión .zip de finalFileName
   const baseName = finalFileName.replace(/\.zip$/i, "");
   let counter = 1;
+  //recorre las screenshots
   for (const shot of screenshots) {
     const newName = `scr${String(counter).padStart(2, "0")}_${baseName}${path.extname(shot.filename)}`;
     // Ruta de destino
     const destPath = path.join(scrFolder, newName);
     fs.renameSync(shot.path, destPath);
-    screenshotNames.push(newName);
+    // screenshotNames.push(newName);
     counter++;
   }
 
