@@ -190,6 +190,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
   try {
 
     if (!file) throw new Error('No savefile uploaded');
+    console.log("Proceso asincrono iniciado")
 
     const { gameID, tags, platformID, title, description } = body;
     const tagsArray = Array.isArray(tags) ? tags : [tags];
