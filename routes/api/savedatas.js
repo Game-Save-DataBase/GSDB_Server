@@ -13,6 +13,7 @@ const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const httpResponses = require('../../utils/httpResponses');
 const config = require('../../utils/config')
 const { hasStaticFields } = require('../../models/modelRegistry');
+const { scanFileWithVirusTotal, isFileMalicious } = require('../../utils/virusTotal');
 
 const axios = require('axios');
 
@@ -177,6 +178,134 @@ router.post('/', authenticateMW, uploadSaveDataFiles.fields([
     return httpResponses.badRequest(res, err.message || 'Unable to save data');
   }
 });
+
+// ------------ ASYN PROCESS
+async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
+  try {
+
+    if (!file) throw new Error('No savefile uploaded');
+    console.log("Proceso asincrono iniciado")
+
+    const { gameID, tags, platformID, title, description } = body;
+    const tagsArray = Array.isArray(tags) ? tags : [tags];
+    const userID = user.userID;
+
+    if (!gameID) throw new Error('Missing gameID');
+    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
+    if (!game) throw new Error('Game not found');
+
+    const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
+    const saveID = tempSaveData.saveID.toString();
+    const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
+    if (!fs.existsSync(uploadPath)) {
+      fs.mkdirSync(uploadPath, { recursive: true });
+    }
+
+    const finalFileName = `gsdb_${saveID}${user.userID}${gameID}.zip`;
+    const finalFilePath = path.join(uploadPath, finalFileName);
+
+    // Crear zip
+    await new Promise((resolve, reject) => {
+      const output = fs.createWriteStream(finalFilePath);
+      const archive = archiver('zip', { zlib: { level: 9 } });
+
+      output.on('close', resolve);
+      archive.on('error', reject);
+
+      archive.pipe(output);
+      archive.file(file.path, { name: file.originalname });
+      archive.finalize();
+    });
+
+    // Análisis VirusTotal
+    const vtReport = await scanFileWithVirusTotal(finalFilePath);
+    if (isFileMalicious(vtReport)) {
+      // Limpiar archivos
+      if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+      if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
+      await SaveDatas.deleteOne({ saveID }); // borra registro malicioso
+
+      // Aquí lanzar notificación de archivo malicioso (ver abajo)
+      // notifyUser(user.userID, 'Archivo malicioso detectado. Subida cancelada.');
+      console.log("Archivo Malicioso")
+      return;
+    }
+
+    // Limpiar archivo temporal original
+    if (fs.existsSync(file.path)) fs.unlinkSync(file.path);
+
+    // Mover capturas si hay
+    const screenshotNames = [];
+    const scrFolder = path.join(uploadPath, "scr");
+
+    // Crear carpeta "scr" si no existe
+    if (!fs.existsSync(scrFolder)) {
+      fs.mkdirSync(scrFolder, { recursive: true });
+    }
+
+    // Quitar la extensión .zip de finalFileName
+    const baseName = finalFileName.replace(/\.zip$/i, "");
+    let counter = 1;
+    for (const shot of screenshots) {
+      const newName = `scr${String(counter).padStart(2, "0")}_${baseName}${path.extname(shot.filename)}`;
+      // Ruta de destino
+      const destPath = path.join(scrFolder, newName);
+      fs.renameSync(shot.path, destPath);
+      screenshotNames.push(newName);
+      counter++;
+    }
+
+    tempSaveData.file = finalFileName;
+    tempSaveData.fileSize = file.size;
+    await tempSaveData.save();
+
+    // Actualizar juego y usuario
+    await updateGameAfterUpload(gameID, saveID);
+    await updateUserAfterUpload(user, saveID);
+
+    // Notificar usuario subida OK
+    // notifyUser(user.userID, 'Archivo subido y guardado correctamente.');
+    console.log("Archivo subido y guardado correctamente.")
+
+
+  } catch (error) {
+    console.error("Error en proceso asíncrono de subida:", error);
+    // Aquí podrías notificar error genérico también
+    // notifyUser(user.userID, 'Error inesperado en la subida.');
+    console.log("Error inesperado en la subida.")
+
+  }
+}
+
+router.post('/async', authenticateMW, uploadSaveDataFiles.fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'screenshots', maxCount: 4 }
+]), async (req, res) => {
+  try {
+    const file = req.files?.file?.[0];
+    if (!file) throw new Error('No file uploaded');
+
+    asyncProcessSaveFileUpload(file, req.user, req.body, req.files?.screenshots || []);
+
+    // Responder rápido con éxito y redirigir al inicio en frontend
+    return httpResponses.ok(res, { msg: 'Proceso iniciado' });
+  } catch (err) {
+    // Manejo error normal
+    console.error("Error iniciando subida:", err);
+    if (req.files?.file?.[0]?.path && fs.existsSync(req.files?.file?.[0]?.path)) {
+      fs.unlinkSync(req.files?.file?.[0]?.path);
+    }
+    if (req.files?.screenshots) {
+      for (const shot of req.files.screenshots) {
+        if (shot.path && fs.existsSync(shot.path)) {
+          fs.unlinkSync(shot.path);
+        }
+      }
+    }
+    return httpResponses.badRequest(res, err.message || 'No se pudo iniciar la subida');
+  }
+});
+// -------------------------
 
 
 router.put('/', authenticateMW, async (req, res) => {
