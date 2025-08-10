@@ -5,7 +5,6 @@ async function sendNotification({ userIDs, type, args }) {
   const { Users } = require('../models/Users'); //<- aqui dentro por las dependencias circulares
   const templateFn = notificationTemplates[type];
   if (!templateFn) throw new Error(`Unknown notification type: ${type}`);
-
   const notification = {
     ...templateFn(args),
     _id: new mongoose.Types.ObjectId(),

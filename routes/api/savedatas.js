@@ -4,7 +4,7 @@ const path = require('path');
 const router = express.Router();
 const archiver = require('archiver');
 const { uploadSaveDataFiles } = require('../../config/multer');
-const {authenticateMW} = require('../../middleware/authMW');
+const { authenticateMW } = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { SaveDatas } = require('../../models/SaveDatas');
 const { Games } = require('../../models/Games');
@@ -18,6 +18,7 @@ const { scanFileWithVirusTotal, isFileMalicious } = require('../../utils/virusTo
 const axios = require('axios');
 
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'savedata route testing! :)'));
+const { sendNotification } = require('../../scripts/sendNotification');
 
 
 /**
@@ -127,7 +128,6 @@ async function updateGameAfterUpload(gameID, saveID) {
   }
 
   game = await Games.findOne({ gameID: Number(gameID) });
-  console.log(game)
   if (game) {
     if (!game.saveID.includes(saveID)) {
       game.saveID.push(saveID);
@@ -184,7 +184,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
   try {
 
     if (!file) throw new Error('No savefile uploaded');
-    console.log("Proceso asincrono iniciado")
+
 
     const { gameID, tags, platformID, title, description } = body;
     const tagsArray = Array.isArray(tags) ? tags : [tags];
@@ -217,7 +217,13 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       archive.finalize();
     });
 
-    // Análisis VirusTotal
+    console.log("Proceso asincrono iniciado")
+    await sendNotification({
+      userIDs: user.userID,
+      type: 3,
+      args: { game: game.data }
+    });
+
     const vtReport = await scanFileWithVirusTotal(finalFilePath);
     if (isFileMalicious(vtReport)) {
       // Limpiar archivos
@@ -225,9 +231,11 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       if (fs.existsSync(finalFilePath)) fs.unlinkSync(finalFilePath);
       await SaveDatas.deleteOne({ saveID }); // borra registro malicioso
 
-      // Aquí lanzar notificación de archivo malicioso (ver abajo)
-      // notifyUser(user.userID, 'Archivo malicioso detectado. Subida cancelada.');
-      console.log("Archivo Malicioso")
+      await sendNotification({
+        userIDs: user.userID,
+        type: 4,
+        args: { game: game.data }
+      });
       return;
     }
 
@@ -263,17 +271,22 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
     await updateGameAfterUpload(gameID, saveID);
     await updateUserAfterUpload(user, saveID);
 
-    // Notificar usuario subida OK
-    // notifyUser(user.userID, 'Archivo subido y guardado correctamente.');
-    console.log("Archivo subido y guardado correctamente.")
+    await sendNotification({
+      userIDs: user.userID,
+      type: 5,
+      args: { savedata: tempSaveData, game: game.data }
+    });
 
 
   } catch (error) {
     console.error("Error en proceso asíncrono de subida:", error);
-    // Aquí podrías notificar error genérico también
-    // notifyUser(user.userID, 'Error inesperado en la subida.');
-    console.log("Error inesperado en la subida.")
 
+    if (user) {
+      await sendNotification({
+        userIDs: user.userID,
+        type: 6
+      });
+    }
   }
 }
 

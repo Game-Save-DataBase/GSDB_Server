@@ -37,11 +37,10 @@ module.exports = {
   }),
 
   //Error en la subida
-    6: ({ game }) => ({
+    6: () => ({
     type: 6,
     title: `An error occurred  while uploading your savedata`,
-    body: `An unexpected error occurred while trying to upload your savedata for "${game.title}". Please try again`,
-    link: `/g/${game.slug}`,
+    body: `An unexpected error occurred while trying to upload your savedata. Please try again`,
   }),
 
 };
