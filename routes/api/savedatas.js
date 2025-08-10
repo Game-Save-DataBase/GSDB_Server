@@ -277,6 +277,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       args: { savedata: tempSaveData, game: game.data }
     });
 
+    console.log("Proceso asincrono finalizado sin errores")
 
   } catch (error) {
     console.error("Error en proceso asíncrono de subida:", error);
