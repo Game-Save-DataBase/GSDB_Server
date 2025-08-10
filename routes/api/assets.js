@@ -67,7 +67,7 @@ router.get('/savedata/:id/scr', async (req, res) => {
   const folderPath = path.join(uploadsBasePath, req.params.id);
   const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
   if (!fs.existsSync(scrPath)) {
-    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
+    return httpResponses.noContent(res);
   }
   const fileName = findFirstZip(folderPath) || `${req.params.id}.zip`;
   createZipAndSend(res, scrPath, `screenshots-${fileName}`);
@@ -77,7 +77,7 @@ router.get('/savedata/:id/scr/main', async (req, res) => {
   const scrPath = path.join(uploadsBasePath, req.params.id, 'scr');
 
   if (!fs.existsSync(scrPath)) {
-    return httpResponses.notFound(res, `Screenshots not found for id ${req.params.id}`);
+    return httpResponses.noContent(res);
   }
 
   // Leer y ordenar archivos
@@ -86,7 +86,7 @@ router.get('/savedata/:id/scr/main', async (req, res) => {
     .sort((a, b) => a.localeCompare(b));
 
   if (files.length === 0) {
-    return httpResponses.notFound(res, `No screenshot files found for id ${req.params.id}`);
+    return httpResponses.noContent(res);
   }
 
   const firstScreenshotPath = path.join(scrPath, files[0]);
