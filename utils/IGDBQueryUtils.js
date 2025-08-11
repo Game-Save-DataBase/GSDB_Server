@@ -32,7 +32,6 @@ function IGDB_buildWhereViaQuery(rawQuery, modelName) {
     const disallowedKeys = Object.keys(rawQuery).filter(
         key => key !== 'limit' && key !== 'offset' && !validFields.includes(key)
     );
-
     if (disallowedKeys.length) {
         throw new Error(
             `Invalid filter key(s) provided: ${disallowedKeys.join(', ')}`

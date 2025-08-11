@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const {authenticateMW} = require('../../middleware/authMW');
+const { authenticateMW } = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQueryUtils.js');
@@ -45,44 +45,37 @@ async function localGameSearch(req, res, query) {
   return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 }
 
-async function externalGameSearch(req, res, query) {
-  try {
-    let limit = 50;
-    let offset = 0;
+// Extraemos función que solo devuelve datos
+async function externalGameSearch(query) {
+  let limit = 50;
+  let offset = 0;
 
-    if (query.limit) {
-      const parsedLimit = parseInt(query.limit);
-      if (!isNaN(parsedLimit) && parsedLimit > 0) limit = parsedLimit;
-      delete query.limit;
-    }
-
-    if (query.offset) {
-      const parsedOffset = parseInt(query.offset);
-      if (!isNaN(parsedOffset) && parsedOffset >= 0) offset = parsedOffset;
-      delete query.offset;
-    }
-
-    let complete = true;
-    if ('complete' in query) {
-      complete = !(query.complete === 'false' || query.complete === false);
-      delete query.complete;
-    }
-
-    const igdbResults = await searchGamesFromIGDB({
-      query,
-      limit,
-      offset,
-      complete
-    });
-
-    if (igdbResults.length === 0) {
-      return httpResponses.noContent(res, 'No coincidences');
-    }
-
-    return httpResponses.ok(res, igdbResults.length === 1 ? igdbResults[0] : igdbResults);
-  } catch (err) {
-    return httpResponses.badRequest(res, err.message);
+  if (query.limit) {
+    const parsedLimit = parseInt(query.limit);
+    if (!isNaN(parsedLimit) && parsedLimit > 0) limit = parsedLimit;
+    delete query.limit;
   }
+
+  if (query.offset) {
+    const parsedOffset = parseInt(query.offset);
+    if (!isNaN(parsedOffset) && parsedOffset >= 0) offset = parsedOffset;
+    delete query.offset;
+  }
+
+  let complete = true;
+  if ('complete' in query) {
+    complete = !(query.complete === 'false' || query.complete === false);
+    delete query.complete;
+  }
+
+  const igdbResults = await searchGamesFromIGDB({
+    query,
+    limit,
+    offset,
+    complete
+  });
+
+  return igdbResults;
 }
 
 
@@ -103,9 +96,14 @@ router.get('/', async (req, res) => {
       delete query.complete;
       return await localGameSearch(req, res, query)
     }
+    console.log(query)
+    const results = await externalGameSearch(query);
 
-    return await externalGameSearch(req, res, query)
+    if (results.length === 0) {
+      return httpResponses.noContent(res, 'No coincidences');
+    }
 
+    return httpResponses.ok(res, results.length === 1 ? results[0] : results);
   } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
@@ -114,6 +112,53 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/search', async (req, res) => {
+  try {
+    const searchValue = req.query.q || "";
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+    console.log(req.query)
+
+    const query = {
+      complete: false,
+      title: { like: searchValue }
+    };
+
+    if (limit) query.limit = limit;
+    if (offset) query.offset = offset;
+    if(req.query.platformID) query.platformID = req.query.platformID;
+    if(req.query.release_date) query.release_date = req.query.release_date;
+
+    console.log(query)
+    const data = await externalGameSearch(query);
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return httpResponses.noContent(res, 'No coincidences');
+    }
+
+    const normalizedQuery = searchValue.trim().toLowerCase();
+
+    const sorted = data.sort((a, b) => {
+      const aTitle = a.title.toLowerCase();
+      const bTitle = b.title.toLowerCase();
+      const aIndex = aTitle.indexOf(normalizedQuery);
+      const bIndex = bTitle.indexOf(normalizedQuery);
+
+      if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
+      if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      return aTitle.length - bTitle.length;
+    });
+
+    return httpResponses.ok(res, sorted);
+
+  } catch (error) {
+    if (error.name === 'InvalidQueryFields') {
+      return httpResponses.badRequest(res, error.message);
+    }
+    return httpResponses.internalError(res, error.message);
+  }
+});
 
 /**
  * @route POST api/games/igdb
