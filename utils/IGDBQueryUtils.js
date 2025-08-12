@@ -272,6 +272,9 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
         baseConditions.push(whereString);
     }
 
+
+    console.log("PLATAFORMASIDS ACTUALES: ",getIgdbPlatformIds())
+    console.log("PLATAFORMASMAP ACTUALES: ",getIgdbPlatformMap())
     // Si no se filtró explícitamente por plataformas, aplicar las conocidas por defecto
     if (!whereString || !whereString.includes("platforms")) {
         baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
