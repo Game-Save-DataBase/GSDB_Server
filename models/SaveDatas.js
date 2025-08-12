@@ -26,7 +26,7 @@ const SavesSchema = new mongoose.Schema({
   likes: { type: [Number], default: [] }, //array de userID unicos
   dislikes: { type: [Number], default: [] }, //array de userID unicos
   rating: { type: Number, default: 0 }, //valor ponderado calculado a traves de los likes y dislikes
-  tagID: { type: [String], required: false } // ids de las tag asociadas a este save
+  tagID: { type: [Number], required: false } // ids de las tag asociadas a este save
 });
 SavesSchema.plugin(AutoIncrement, { inc_field: 'saveID', start_seq: 0 });
 

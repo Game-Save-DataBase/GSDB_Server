@@ -35,7 +35,7 @@ async function findByQuery(query, modelName) {
 
     try {
         const filter = await buildMongoFilter(query, modelName, []);
-        console.log("Filtro final construido:", JSON.stringify(filter, null, 2));
+        console.log(filter)
         const results = await modelDef.model
             .find(filter)
             .sort({ [modelDef.foreignKey]: -1 })
