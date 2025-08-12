@@ -29,7 +29,6 @@ const { sendNotification } = require('../../scripts/sendNotification');
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-    console.log(query);
     // Buscar por id si viene en la query
     const fastResult = await findByID(query, 'savedata');
     if (fastResult !== undefined) {
@@ -61,32 +60,32 @@ router.get('/search', async (req, res) => {
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
 
     const query = {
-      title: { like: searchValue },
-      description: { like: searchValue },
-      'game.title' : { like: searchValue },
-      'platform.name' : {like: searchValue } ,
-      'platform.abbreviation': { like: searchValue },
-      'user.bio': {like:searchValue},
-      'user.alias': {like:searchValue},
-      'user.userName': {like:searchValue}
+      title: { like: searchValue, __or: true },
+      description: { like: searchValue, __or: true },
+      'game.title': { like: searchValue, __or: true },
+      'platform.name': { like: searchValue, __or: true },
+      'platform.abbreviation': { like: searchValue, __or: true },
+      'user.bio': { like: searchValue, __or: true },
+      'user.alias': { like: searchValue, __or: true },
+      'user.userName': { like: searchValue, __or: true }
     };
 
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
     if (req.query.platformID) query.platformID = req.query.platformID;
-    if (req.query.release_date) query.release_date = req.query.release_date;
+    if (req.query.postedDate) query.postedDate = req.query.postedDate;
     if (req.query.tagID) query.tagID = req.query.tagID;
-    // Buscar por query completo
-    const data = await findByQuery(query, 'savedata', true);
+
+    // findByQuery ahora usará buildMongoFilter que respeta __or por campo (directo y relacional)
+    const data = await findByQuery(query, 'savedata');
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
 
     const normalizedQuery = searchValue.trim().toLowerCase();
-
     const sorted = data.sort((a, b) => {
-      const aTitle = a.title.toLowerCase();
-      const bTitle = b.title.toLowerCase();
+      const aTitle = (a.title || "").toLowerCase();
+      const bTitle = (b.title || "").toLowerCase();
       const aIndex = aTitle.indexOf(normalizedQuery);
       const bIndex = bTitle.indexOf(normalizedQuery);
 
@@ -97,7 +96,7 @@ router.get('/search', async (req, res) => {
     });
 
     return httpResponses.ok(res, sorted);
-  } catch(error) {
+  } catch (error) {
     if (error.name === 'InvalidQueryFields') {
       return httpResponses.badRequest(res, error.message);
     }

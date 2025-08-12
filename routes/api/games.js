@@ -96,7 +96,6 @@ router.get('/', async (req, res) => {
       delete query.complete;
       return await localGameSearch(req, res, query)
     }
-    console.log(query)
     const results = await externalGameSearch(query);
 
     if (results.length === 0) {

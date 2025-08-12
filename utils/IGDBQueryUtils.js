@@ -180,13 +180,9 @@ function slugifyQuery(query) {
     // Detectar si hay campo 'title'
     if ('title' in query) {
         const val = query.title;
-        console.log(val)
-
         if (typeof val === 'object' && val !== null && 'in' in val) {
             // dejamos title[in] tal cual, no hacemos nada ni tocamos slug
-            console.log(1)
         } else if (typeof val === 'string') {
-            console.log(2)
             // Cuando title = string, generamos slug[in] con sufijos separados por ';'
             const baseSlug = slugifyString(val);
             const slugArray = [baseSlug];
@@ -196,7 +192,6 @@ function slugifyQuery(query) {
             newQuery.slug = { in: slugArray.join(';') };
             delete newQuery.title;
         } else if (typeof val === 'object' && val !== null) {
-            console.log(3)
             // Procesamos operadores, solo transformamos 'end' a slug[end]
             const transformed = {};
 
