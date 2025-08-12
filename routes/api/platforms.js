@@ -6,7 +6,6 @@ const { hasStaticFields } = require('../../models/modelRegistry');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices');
-const { setIgdbPlatformMap } = require('../../utils/constants');
 
 // Función para sincronizar plataformas de IGDB y actualizar Mongo
 async function syncPlatformsFromIGDB() {
@@ -125,15 +124,6 @@ router.get('/', async (req, res) => {
 router.post('/refresh-igdb', blockIfNotDev, async (req, res) => {
   try {
     const result = await syncPlatformsFromIGDB();
-
-    const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
-    const map = {};
-    for (const p of platforms) {
-      map[p.platformID] = p.IGDB_ID;
-    }
-
-    setIgdbPlatformMap(map); // guarda el mapeo completo
-    console.log(map);
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
   } catch (err) {
     return httpResponses.internalError(res, 'Error syncing platforms from IGDB', err.message || err);

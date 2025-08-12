@@ -6,9 +6,9 @@ const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQueryUtils.js');
 const { Games } = require('../../models/Games');
 const httpResponses = require('../../utils/httpResponses');
-const { getIgdbPlatformIds } = require('../../utils/constants');
 const { callIGDB } = require('../../services/igdbServices')
 const { hasLocalFields } = require('../../models/modelRegistry');
+const { Platforms } = require('../../models/Platforms');
 
 
 /**
@@ -192,9 +192,12 @@ router.post('/igdb', blockIfNotDev, async (req, res) => {
       return httpResponses.notFound(res, 'No new games to fetch; all IDs already exist in the database.');
     }
 
+    const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
+    const allPlatformsIDs = platforms.map(p => p.platformID);
+
     const gameQuery = `
       fields id, name, cover.image_id, screenshots.image_id, platforms, slug, url, first_release_date;
-      where id = (${igdbIds.join(',')}) & platforms = (${getIgdbPlatformIds().join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
+      where id = (${igdbIds.join(',')}) & platforms = (${allPlatformsIDs.join(',')}) & version_parent = null & game_type = (0,1,2,3,4,8,9,11);
       limit ${igdbIds.length};
       sort rating_count asc;
     `;

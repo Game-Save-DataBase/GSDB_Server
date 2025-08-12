@@ -4,7 +4,6 @@ const { callIGDB } = require('../services/igdbServices');
 const config = require('./config.js');
 const { Games } = require('../models/Games');
 const { Platforms } = require('../models/Platforms');
-const { getIgdbPlatformIds, getIgdbPlatformMap } = require('./constants');
 
 const igdbOpMap = {
     gt: '>',
@@ -235,9 +234,13 @@ function normalizeStr(str) {
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = true }) {
     const { platformID, ...restQuery } = query;
     // Mapear platformIDs si vienen
+    const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
+    const map = {};
+    for (const p of platforms) {
+        map[p.platformID] = p.IGDB_ID;
+    }
+    const allPlatformsIDs = platforms.map(p => p.platformID);
     if (platformID) {
-        const map = getIgdbPlatformMap();
-        let mappedIDs = [];
 
         if (typeof platformID === 'object' && platformID !== null) {
             // Tiene operadores como { in: '65,48' }
@@ -272,12 +275,9 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
         baseConditions.push(whereString);
     }
 
-
-    console.log("PLATAFORMASIDS ACTUALES: ",getIgdbPlatformIds())
-    console.log("PLATAFORMASMAP ACTUALES: ",getIgdbPlatformMap())
     // Si no se filtró explícitamente por plataformas, aplicar las conocidas por defecto
     if (!whereString || !whereString.includes("platforms")) {
-        baseConditions.push(`platforms = (${getIgdbPlatformIds().join(',')})`);
+        baseConditions.push(`platforms = (${allPlatformsIDs.join(',')})`);
     }
 
     const finalWhere = baseConditions.join(' & ');
