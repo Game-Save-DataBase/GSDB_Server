@@ -133,7 +133,7 @@ router.post('/refresh-igdb', blockIfNotDev, async (req, res) => {
     }
 
     setIgdbPlatformMap(map); // guarda el mapeo completo
-
+    console.log(map);
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
   } catch (err) {
     return httpResponses.internalError(res, 'Error syncing platforms from IGDB', err.message || err);
