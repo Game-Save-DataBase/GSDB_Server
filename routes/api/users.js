@@ -46,6 +46,66 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/search', async (req, res) => {
+  try {
+    const searchValue = req.query.q || "";
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+
+    const query = {
+      alias: { like: searchValue, __or: true },
+      userName: { like: searchValue, __or: true },
+      bio: { like: searchValue, __or: true }
+    };
+
+    if (limit) query.limit = limit;
+    if (offset) query.offset = offset;
+    if (req.query.admin) query.admin = req.query.admin;
+    if (req.query.trusted) query.trusted = req.query.trusted;
+    if (req.query.verified) query.verified = req.query.verified;
+    if (req.query.rating) query.rating = req.query.rating;
+
+    const data = await findByQuery(query, 'user');
+    if (!Array.isArray(data) || data.length === 0) {
+      return httpResponses.noContent(res, 'No coincidences');
+    }
+
+    const normalizedQuery = searchValue.trim().toLowerCase();
+    const sorted = data.sort((a, b) => {
+      const aUserName = (a.userName || "").toLowerCase();
+      const bUserName = (b.userName || "").toLowerCase();
+      const aAlias = (a.alias || "").toLowerCase();
+      const bAlias = (b.alias || "").toLowerCase();
+
+      const aIndexUser = aUserName.indexOf(normalizedQuery);
+      const bIndexUser = bUserName.indexOf(normalizedQuery);
+
+      if (aUserName.startsWith(normalizedQuery) && !bUserName.startsWith(normalizedQuery)) return -1;
+      if (!aUserName.startsWith(normalizedQuery) && bUserName.startsWith(normalizedQuery)) return 1;
+      if (aIndexUser !== bIndexUser) return aIndexUser - bIndexUser;
+
+      // Fallback: alias
+      const aIndexAlias = aAlias.indexOf(normalizedQuery);
+      const bIndexAlias = bAlias.indexOf(normalizedQuery);
+
+      if (aAlias.startsWith(normalizedQuery) && !bAlias.startsWith(normalizedQuery)) return -1;
+      if (!aAlias.startsWith(normalizedQuery) && bAlias.startsWith(normalizedQuery)) return 1;
+      if (aIndexAlias !== bIndexAlias) return aIndexAlias - bIndexAlias;
+
+      return aAlias.length - bAlias.length;
+    });
+
+    return httpResponses.ok(res, sorted);
+  } catch (error) {
+    if (error.name === 'InvalidQueryFields') {
+      return httpResponses.badRequest(res, error.message);
+    }
+    return httpResponses.internalError(res, error.message);
+  }
+});
+
+
+
 // POST api/users
 router.post('/', async (req, res) => {
   try {
