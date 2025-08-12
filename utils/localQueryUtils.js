@@ -16,7 +16,7 @@ const mongoOpMap = {
 };
 
 
-async function findByQuery(query, modelName) {
+async function findByQuery(query, modelName, useOr=false) {
     const modelDef = getModelDefinition(modelName);
     if (!modelDef) throw new Error(`Model definition not found for model: ${modelName}`);
     let limit = 50;
@@ -35,7 +35,8 @@ async function findByQuery(query, modelName) {
     }
 
     try {
-        const filter = await buildMongoFilter(query, modelName);
+        const filter = await buildMongoFilter(query, modelName, [],useOr);
+        // console.log(filter)
         const results = await modelDef.model.find(filter).sort({ [modelDef.foreignKey]: -1 }).skip(offset).limit(limit).lean();
         return results;
     } catch (err) {
@@ -90,9 +91,8 @@ async function findByID(query, modelName) {
     return undefined;
 }
 
-async function buildMongoFilter(query, modelName, visitedRelations = []) {
-    if (!query || !Object.keys(query).length) return {};  // <-- Aquí el cambio
-
+async function buildMongoFilter(query, modelName, visitedRelations = [], useOr = false) {
+    if (!query || !Object.keys(query).length) return {};
     const { filterFields, foreignKey } = getModelDefinition(modelName);
     const allowedKeys = [...Object.keys(filterFields), '_id', 'id'];
 
@@ -107,12 +107,11 @@ async function buildMongoFilter(query, modelName, visitedRelations = []) {
     const filter = {};
 
     // Procesar filtros relacionales recursivamente
-    await processRelationalFilters(filter, relationalFilters, visitedRelations);
+    await processRelationalFilters(filter, relationalFilters, visitedRelations, useOr);
     // Procesar filtros directos
-    processDirectFilters(filter, directFilters, filterFields);
+    processDirectFilters(filter, directFilters, filterFields, useOr);
     // Manejar _id especial
     processIdFilter(filter, directFilters._id);
-
     return filter;
 }
 
@@ -136,11 +135,12 @@ function separateFilters(query, allowedKeys) {
     return { directFilters, relationalFilters };
 }
 
-async function processRelationalFilters(filter, relationalFilters, visitedRelations) {
+async function processRelationalFilters(filter, relationalFilters, visitedRelations, useOr = false) {
+    const conditions = []; // Aquí guardaremos cada subcondición
+    if(!Array.isArray(visitedRelations)) visitedRelations = [visitedRelations]
     for (const relation in relationalFilters) {
         if (visitedRelations.includes(relation)) continue;
-
-        const subFilter = await buildMongoFilter(relationalFilters[relation], relation, [...visitedRelations, relation]);
+        const subFilter = await buildMongoFilter(relationalFilters[relation], relation, [...visitedRelations, relation], useOr);
 
         const relationDef = getModelDefinition(relation);
         if (!relationDef) throw new Error(`Model definition for relation '${relation}' not found`);
@@ -149,29 +149,47 @@ async function processRelationalFilters(filter, relationalFilters, visitedRelati
 
         let ids = [];
 
-        if (relation === 'game') {
-            // Lógica para usar búsqueda externa de juegos
-            const externalGames = await searchGamesFromIGDB(subFilter);
-            ids = externalGames.map(g => g[keyField]).filter(Boolean);
+        const relatedDocs = await relationDef.model.find(subFilter, { [keyField]: 1 }).lean();
+        ids = relatedDocs.map(d => d[keyField]);
+
+        const condition = { [keyField]: ids.length ? { $in: ids } : { $in: [null] } };
+
+        if (useOr) {
+            conditions.push(condition);
         } else {
-            const relatedDocs = await relationDef.model.find(subFilter, { [keyField]: 1 }).lean();
-            ids = relatedDocs.map(d => d[keyField]);
+            if (filter[keyField]) throw new Error(`Duplicate relational filter key: ${keyField}`);
+            filter[keyField] = condition[keyField];
         }
+    }
 
-        if (filter[keyField]) throw new Error(`Duplicate relational filter key: ${keyField}`);
-
-        filter[keyField] = ids.length ? { $in: ids } : { $in: [null] };
+    if (useOr && conditions.length) {
+        if (!filter.$or) filter.$or = [];
+        filter.$or.push(...conditions);
     }
 }
 
+function processDirectFilters(filter, directFilters, filterFields, useOr = false) {
+    const conditions = [];
 
-function processDirectFilters(filter, directFilters, filterFields) {
     for (const [field, type] of Object.entries(filterFields)) {
         if (!(field in directFilters)) continue;
-        if (filter[field]) throw new Error(`Duplicate filter for field: ${field}`);
-        filter[field] = parseFilterValue(directFilters[field], type, field);
+
+        const parsed = parseFilterValue(directFilters[field], type, field);
+
+        if (useOr) {
+            conditions.push({ [field]: parsed });
+        } else {
+            if (filter[field]) throw new Error(`Duplicate filter for field: ${field}`);
+            filter[field] = parsed;
+        }
+    }
+
+    if (useOr && conditions.length) {
+        if (!filter.$or) filter.$or = [];
+        filter.$or.push(...conditions);
     }
 }
+
 function parseFilterValue(value, type, fieldName = 'unknown') {
     const isArray = type.startsWith('array:');
     const subtype = isArray ? type.split(':')[1] : type;

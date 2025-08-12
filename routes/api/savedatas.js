@@ -29,7 +29,7 @@ const { sendNotification } = require('../../scripts/sendNotification');
 router.get('/', async (req, res) => {
   try {
     const query = req.query;
-
+    console.log(query);
     // Buscar por id si viene en la query
     const fastResult = await findByID(query, 'savedata');
     if (fastResult !== undefined) {
@@ -54,20 +54,70 @@ router.get('/', async (req, res) => {
   }
 });
 
+router.get('/search', async (req, res) => {
+  try {
+    const searchValue = req.query.q || "";
+    const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
+    const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+
+    const query = {
+      title: { like: searchValue },
+      description: { like: searchValue },
+      'game.title' : { like: searchValue },
+      'platform.name' : {like: searchValue } ,
+      'platform.abbreviation': { like: searchValue },
+      'user.bio': {like:searchValue},
+      'user.alias': {like:searchValue},
+      'user.userName': {like:searchValue}
+    };
+
+    if (limit) query.limit = limit;
+    if (offset) query.offset = offset;
+    if (req.query.platformID) query.platformID = req.query.platformID;
+    if (req.query.release_date) query.release_date = req.query.release_date;
+    if (req.query.tagID) query.tagID = req.query.tagID;
+    // Buscar por query completo
+    const data = await findByQuery(query, 'savedata', true);
+    if (!Array.isArray(data) || data.length === 0) {
+      return httpResponses.noContent(res, 'No coincidences');
+    }
+
+    const normalizedQuery = searchValue.trim().toLowerCase();
+
+    const sorted = data.sort((a, b) => {
+      const aTitle = a.title.toLowerCase();
+      const bTitle = b.title.toLowerCase();
+      const aIndex = aTitle.indexOf(normalizedQuery);
+      const bIndex = bTitle.indexOf(normalizedQuery);
+
+      if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
+      if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      return aTitle.length - bTitle.length;
+    });
+
+    return httpResponses.ok(res, sorted);
+  } catch(error) {
+    if (error.name === 'InvalidQueryFields') {
+      return httpResponses.badRequest(res, error.message);
+    }
+    return httpResponses.internalError(res, error.message);
+  }
+});
 
 
 async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   if (!file) throw new Error('No savefile uploaded');
 
-  const { gameID, tags, platformID, title, description } = body;
-  const tagsArray = Array.isArray(tags) ? tags : [tags];
+  const { gameID, tagID, platformID, title, description } = body;
+  const tagsArray = Array.isArray(tagID) ? tagID : [tagID];
   const userID = user.userID;
 
   if (!gameID) throw new Error('Missing gameID');
   const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
   if (!game) throw new Error('Game not found');
 
-  const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
+  const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray });
   const saveID = tempSaveData.saveID.toString();
   const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID);
   if (!fs.existsSync(uploadPath)) {
@@ -186,15 +236,15 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
     if (!file) throw new Error('No savefile uploaded');
 
 
-    const { gameID, tags, platformID, title, description } = body;
-    const tagsArray = Array.isArray(tags) ? tags : [tags];
+    const { gameID, tagID, platformID, title, description } = body;
+    const tagsArray = Array.isArray(tagID) ? tagID : [tagID];
     const userID = user.userID;
 
     if (!gameID) throw new Error('Missing gameID');
     const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
     if (!game) throw new Error('Game not found');
 
-    const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tags: tagsArray });
+    const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray });
     const saveID = tempSaveData.saveID.toString();
     const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
     if (!fs.existsSync(uploadPath)) {

@@ -117,7 +117,6 @@ router.get('/search', async (req, res) => {
     const searchValue = req.query.q || "";
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
-    console.log(req.query)
 
     const query = {
       complete: false,
@@ -129,7 +128,6 @@ router.get('/search', async (req, res) => {
     if(req.query.platformID) query.platformID = req.query.platformID;
     if(req.query.release_date) query.release_date = req.query.release_date;
 
-    console.log(query)
     const data = await externalGameSearch(query);
 
     if (!Array.isArray(data) || data.length === 0) {

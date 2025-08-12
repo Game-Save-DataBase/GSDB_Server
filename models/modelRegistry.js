@@ -49,6 +49,7 @@ const modelRegistry = {
             userID: 'number',
             userName: 'string',
             alias: 'string',
+            bio:'string',
             admin: 'boolean',
             verified: 'boolean',
             rating: 'number',

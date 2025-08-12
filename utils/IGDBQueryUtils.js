@@ -41,7 +41,6 @@ function IGDB_buildWhereViaQuery(rawQuery, modelName) {
     const shouldSlugify = slugifyFields.some(field =>
         field in rawQuery && 'slug' in modelDef.igdbFilterFields
     );
-
     const query = shouldSlugify ? slugifyQuery(rawQuery) : rawQuery;
     const whereClauses = [];
 
@@ -181,10 +180,13 @@ function slugifyQuery(query) {
     // Detectar si hay campo 'title'
     if ('title' in query) {
         const val = query.title;
+        console.log(val)
 
         if (typeof val === 'object' && val !== null && 'in' in val) {
             // dejamos title[in] tal cual, no hacemos nada ni tocamos slug
+            console.log(1)
         } else if (typeof val === 'string') {
+            console.log(2)
             // Cuando title = string, generamos slug[in] con sufijos separados por ';'
             const baseSlug = slugifyString(val);
             const slugArray = [baseSlug];
@@ -194,6 +196,7 @@ function slugifyQuery(query) {
             newQuery.slug = { in: slugArray.join(';') };
             delete newQuery.title;
         } else if (typeof val === 'object' && val !== null) {
+            console.log(3)
             // Procesamos operadores, solo transformamos 'end' a slug[end]
             const transformed = {};
 
@@ -236,7 +239,6 @@ function normalizeStr(str) {
  */
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = true }) {
     const { platformID, ...restQuery } = query;
-
     // Mapear platformIDs si vienen
     if (platformID) {
         const map = getIgdbPlatformMap();
@@ -266,7 +268,6 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, complete = t
     }
 
     const whereString = IGDB_buildWhereViaQuery(restQuery, 'game');
-
     const baseConditions = [
         'version_parent = null',
         'game_type = (0,3,4,8,9,11)'
@@ -323,11 +324,11 @@ async function createGameFromIGDB(game, complete = true, external = true, select
     const coverURL = cover?.image_id
         ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
         : config.paths.gameCover_default;
-    const screenshotURL = complete? 
+    const screenshotURL = complete ?
         Array.isArray(screenshots) && screenshots[0]?.image_id
             ? `https://images.igdb.com/igdb/image/upload/t_1080p/${screenshots[0].image_id}.jpg`
             : config.paths.banner_default
-            : undefined
+        : undefined
 
     //PLATAFORMAS CON NUESTROS ID
     const platformRes = await Platforms.find({ IGDB_ID: { $in: platforms } })
