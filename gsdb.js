@@ -20,7 +20,7 @@ const routesAssets = require("./routes/api/assets");
 const { refreshIGDB } = require('./scripts/refreshIGDB');
 
 const app = express();
-
+const MongoStore = require('connect-mongo');
 // use the cors middleware with the
 // origin and credentials options
 const isProduction = process.env.NODE_ENV === 'production';
@@ -41,12 +41,14 @@ app.use(session({
   secret: config.secretKey,
   resave: false,
   saveUninitialized: false,
+  store: isProduction
+    ? MongoStore.create({ mongoUrl: process.env.MONGO_URI })
+    : undefined, // en dev dejamos el MemoryStore por defecto
   cookie: {
+    secure: isProduction,            // true solo en producción (HTTPS)
+    sameSite: isProduction ? 'none' : 'lax', // cross-site en prod, lax en dev
     httpOnly: true,
-    secure: isProduction,             // obligatorio en HTTPS
-    sameSite: isProduction ? 'none' : 'lax', // none para cross-site
-    maxAge: 24 * 60 * 60 * 1000        // 1 día
-    // domain: '.onrender.com'          // opcional si usas un dominio propio
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
