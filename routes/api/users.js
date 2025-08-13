@@ -51,19 +51,30 @@ router.get('/search', async (req, res) => {
     const searchValue = req.query.q || "";
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+    const fast = req.query.fast;
+    delete req.query.fast;
+    let query;
 
-    const query = {
-      alias: { like: searchValue, __or: true },
-      userName: { like: searchValue, __or: true },
-      bio: { like: searchValue, __or: true }
-    };
+    if (!fast) {
+      query = {
+        alias: { like: searchValue, __or: true },
+        userName: { like: searchValue, __or: true },
+        bio: { like: searchValue, __or: true }
+      };
+    } else {
+      query = {
+        userName: { like: searchValue }
+      }
+    }
 
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
-    if (req.query.admin) query.admin = req.query.admin;
-    if (req.query.trusted) query.trusted = req.query.trusted;
-    if (req.query.verified) query.verified = req.query.verified;
-    if (req.query.rating) query.rating = req.query.rating;
+    if (!fast) {
+      if (req.query.admin) query.admin = req.query.admin;
+      if (req.query.trusted) query.trusted = req.query.trusted;
+      if (req.query.verified) query.verified = req.query.verified;
+      if (req.query.rating) query.rating = req.query.rating;
+    }
 
     const data = await findByQuery(query, 'user');
     if (!Array.isArray(data) || data.length === 0) {

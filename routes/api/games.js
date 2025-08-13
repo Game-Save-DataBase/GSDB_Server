@@ -117,7 +117,7 @@ router.get('/search', async (req, res) => {
     const searchValue = req.query.q || "";
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
-
+    delete req.query.fast;
     const query = {
       complete: false,
       title: { like: searchValue }

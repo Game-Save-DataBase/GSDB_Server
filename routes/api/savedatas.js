@@ -58,23 +58,34 @@ router.get('/search', async (req, res) => {
     const searchValue = req.query.q || "";
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+    const fast = req.query.fast;
+    delete req.query.fast;
+    let query;
 
-    const query = {
-      title: { like: searchValue, __or: true },
-      description: { like: searchValue, __or: true },
-      'game.title': { like: searchValue, __or: true },
-      'platform.name': { like: searchValue, __or: true },
-      'platform.abbreviation': { like: searchValue, __or: true },
-      'user.bio': { like: searchValue, __or: true },
-      'user.alias': { like: searchValue, __or: true },
-      'user.userName': { like: searchValue, __or: true }
-    };
+    if (!fast) {
+      query = {
+        title: { like: searchValue, __or: true },
+        description: { like: searchValue, __or: true },
+        'game.title': { like: searchValue, __or: true },
+        'platform.name': { like: searchValue, __or: true },
+        'platform.abbreviation': { like: searchValue, __or: true },
+        'user.bio': { like: searchValue, __or: true },
+        'user.alias': { like: searchValue, __or: true },
+        'user.userName': { like: searchValue, __or: true }
+      };
+    } else {
+      query = {
+        title: { like: searchValue }
+      };
+    }
 
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
-    if (req.query.platformID) query.platformID = req.query.platformID;
-    if (req.query.postedDate) query.postedDate = req.query.postedDate;
-    if (req.query.tagID) query.tagID = req.query.tagID;
+    if (!fast) {
+      if (req.query.platformID) query.platformID = req.query.platformID;
+      if (req.query.postedDate) query.postedDate = req.query.postedDate;
+      if (req.query.tagID) query.tagID = req.query.tagID;
+    }
 
     // findByQuery ahora usará buildMongoFilter que respeta __or por campo (directo y relacional)
     const data = await findByQuery(query, 'savedata');
