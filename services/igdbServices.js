@@ -6,13 +6,9 @@ let expiresAt = 0;
 
 async function getAccessToken() {
   const now = Date.now();
-  console.log("accessToken actual:", accessToken)
-  console.log("expires at actual:", expiresAt)
   if (accessToken && now < expiresAt) {
     return accessToken;
   }
-  console.log("client id", process.env.TWITCH_CLIENT_ID)
-  console.log("client secret", process.env.TWITCH_CLIENT_SECRET)
 
   const response = await apiRequest({
     url: 'https://id.twitch.tv/oauth2/token',

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateMW } = require('../../middleware/authMW');
 const blockIfNotDev = require('../../middleware/devModeMW');
+const checkInternalToken = require('../../middleware/internalMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQueryUtils.js');
 const { Games } = require('../../models/Games');
@@ -162,7 +163,7 @@ router.get('/search', async (req, res) => {
  * @desc Añadir juegos a la base de datos usando un rango de IDs de IGDB
  * @access Dev only
  */
-router.post('/igdb', blockIfNotDev, async (req, res) => {
+router.post('/igdb', checkInternalToken, async (req, res) => {
   const { IGDB_ID, IGDB_ID_INIT, IGDB_ID_END } = req.body;
   let igdbIds = [];
 

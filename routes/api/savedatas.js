@@ -173,7 +173,15 @@ async function updateGameAfterUpload(gameID, saveID) {
   let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`);
   if (!game.data) {
     //lo creamos
-    let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: Number(gameID) });
+    let resPost = await axios.post(
+      `${config.connection}${config.api.games}/igdb`,
+      { IGDB_ID: Number(gameID) },
+      {
+        headers: {
+          'X-Internal-Token': process.env.INTERNAL_MW_KEY
+        }
+      }
+    );
   }
 
   game = await Games.findOne({ gameID: Number(gameID) });

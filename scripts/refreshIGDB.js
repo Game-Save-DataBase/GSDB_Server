@@ -2,8 +2,18 @@ const axios = require('axios');
 const config = require('../utils/config');
 
 async function refreshIGDB() {
+  console.log()
   try {
-    const response = await axios.post(`${config.connection}${config.api.platforms}/refresh-igdb`);
+    const response = await axios.post(
+      `${config.connection}${config.api.platforms}/refresh-igdb`,
+      {}, // body vacío o los datos que quieras enviar
+      {
+        headers: {
+          'X-Internal-Token': process.env.INTERNAL_MW_KEY
+        }
+      }
+    );
+
     return response.data;
   } catch (error) {
     console.error('Error refreshing IGDB:', error.message || error);

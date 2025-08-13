@@ -6,6 +6,8 @@ const { hasStaticFields } = require('../../models/modelRegistry');
 const { Platforms } = require('../../models/Platforms');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices');
+const checkInternalToken = require('../../middleware/internalMW');
+
 
 // Función para sincronizar plataformas de IGDB y actualizar Mongo
 async function syncPlatformsFromIGDB() {
@@ -121,7 +123,7 @@ router.get('/', async (req, res) => {
  * @desc Sync platforms from IGDB into local database
  * @access dev only
  */
-router.post('/refresh-igdb', blockIfNotDev, async (req, res) => {
+router.post('/refresh-igdb',checkInternalToken, async (req, res) => {
   try {
     const result = await syncPlatformsFromIGDB();
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
