@@ -35,7 +35,9 @@ app.use(cors({
 // use the body-parser middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
+if (isProduction) {
+  app.set('trust proxy', 1); // confiar en el primer proxy
+}
 // Sesión
 app.use(session({
   secret: config.secretKey,
