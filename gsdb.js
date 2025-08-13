@@ -39,7 +39,7 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-
+const isProduction = process.env.PROD_MODE;
 // Configurar sesiones
 app.use(
     session({
@@ -47,12 +47,11 @@ app.use(
         resave: false,
         saveUninitialized: false,
         cookie: { 
-            //.........IMPORTANTE
-            //Esto deberia ser secure: true (https) y samesite: none. En produccion deberia ser asi
-            //por ahora lo dejamos asi para usar http y permitir cookies cross-site
-            secure: false, 
-            sameSite: 'lax'
-         } // Cambia a true si usas HTTPS
+            secure: isProduction,              // true en producción (HTTPS), false en dev
+            sameSite: isProduction ? 'none' : 'lax',  // 'none' en prod, 'lax' en dev
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000
+         }
     })
 );
 // Inicializar Passport
