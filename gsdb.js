@@ -6,14 +6,14 @@ const session = require('express-session');
 const connectDB = require('./config/db');
 const cors = require("cors");
 const bodyParser = require("body-parser");
-const path = require('path'); 
+const path = require('path');
 const passport = require('./config/passport');
 const routesGames = require("./routes/api/games");
 const routesPlatforms = require("./routes/api/platforms");
 const routesSaveDatas = require("./routes/api/savedatas");
 const routesComments = require("./routes/api/comments");
 const routesUsers = require("./routes/api/users");
-const routesAuth= require("./routes/api/auth");
+const routesAuth = require("./routes/api/auth");
 const routesTags = require("./routes/api/tags");
 const routesAssets = require("./routes/api/assets");
 
@@ -23,37 +23,33 @@ const app = express();
 
 // use the cors middleware with the
 // origin and credentials options
+const isProduction = process.env.NODE_ENV === 'production';
 
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || config.allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true
-}));
+  origin: isProduction
+    ? 'https://gsdb-web.onrender.com' // dominio de tu frontend en producción
+    : 'http://localhost:3000',    // frontend en desarrollo
+  credentials: true // permite envío de cookies
+}))
 
 // use the body-parser middleware to parse JSON and URL-encoded data
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-const isProduction = process.env.PROD_MODE;
-// Configurar sesiones
-app.use(
-    session({
-        secret: config.secretKey,
-        resave: false,
-        saveUninitialized: false,
-        cookie: { 
-            secure: isProduction,              // true en producción (HTTPS), false en dev
-            sameSite: isProduction ? 'none' : 'lax',  // 'none' en prod, 'lax' en dev
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000
-         }
-    })
-);
+// Sesión
+app.use(session({
+  secret: config.secretKey,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: isProduction,             // obligatorio en HTTPS
+    sameSite: isProduction ? 'none' : 'lax', // none para cross-site
+    maxAge: 24 * 60 * 60 * 1000        // 1 día
+    // domain: '.onrender.com'          // opcional si usas un dominio propio
+  }
+}));
+
 // Inicializar Passport
 app.use(passport.initialize());
 app.use(passport.session());
@@ -73,22 +69,22 @@ app.use(config.paths.assetsFolder, express.static(path.join(__dirname, 'assets')
 
 // Ruta para comprobar la conexión con la API
 app.all(config.api.api, (req, res) => {
-    res.json({
-      msg: 'GSDB API is running',
-      timestamp: Date.now()
-    });
+  res.json({
+    msg: 'GSDB API is running',
+    timestamp: Date.now()
   });
+});
 // get para gestion de errores cuando no existe la ruta
-app.all(config.api.api+'/*', async (req, res) => {
-    try {
-        res.status(404).json({
-            timestamp: Date.now(),
-            msg: 'no route matches your request',
-            code: 404
-        })
-    } catch (e) {
-        throw new Error(e)
-    }
+app.all(config.api.api + '/*', async (req, res) => {
+  try {
+    res.status(404).json({
+      timestamp: Date.now(),
+      msg: 'no route matches your request',
+      code: 404
+    })
+  } catch (e) {
+    throw new Error(e)
+  }
 
 })
 
@@ -111,7 +107,7 @@ connectDB()
         console.error('Error refrescando datos iniciales:', err);
       }
 
-       // Programa que se ejecute refreshIGDB cada X minutos
+      // Programa que se ejecute refreshIGDB cada X minutos
       setInterval(async () => {
         try {
           await refreshIGDB();

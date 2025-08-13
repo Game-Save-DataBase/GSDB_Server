@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 
-const isProd = process.env.PROD_MODE === 'true';
+const isProd = process.env.NODE_ENV === 'production';
 const DIR_GSDB = isProd ? process.env.DIR_GSDB_PROD : process.env.DIR_GSDB+process.env.PORT;
 
 const config = {
