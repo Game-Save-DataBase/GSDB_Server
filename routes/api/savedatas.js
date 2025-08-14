@@ -16,6 +16,7 @@ const { hasStaticFields } = require('../../models/modelRegistry');
 const { scanFileWithVirusTotal, isFileMalicious } = require('../../utils/virusTotal');
 
 const axios = require('axios');
+const { getModelDefinition } = require('../../models/modelRegistry');
 
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'savedata route testing! :)'));
 const { sendNotification } = require('../../scripts/sendNotification');
@@ -58,6 +59,7 @@ router.get('/search', async (req, res) => {
     const searchValue = req.query.q || "";
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
+    let isSorted = false; let sortOrder; let sortField;
     const fast = req.query.fast;
     delete req.query.fast;
     let query;
@@ -81,6 +83,16 @@ router.get('/search', async (req, res) => {
 
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
+    if (req.query.sort && typeof req.query.sort === 'object') {
+      const modelDef = getModelDefinition('savedata')
+      sortOrder = Object.keys(req.query.sort)[0];
+      sortField = req.query.sort[sortOrder];
+      if (!modelDef.filterFields[sortField]) {
+        sortOrder = null; sortField = null;
+      } else {
+        query.sort = req.query.sort; isSorted = true;
+      }
+    }
     if (!fast) {
       if (req.query.platformID) query.platformID = req.query.platformID;
       if (req.query.postedDate) query.postedDate = req.query.postedDate;
@@ -92,19 +104,23 @@ router.get('/search', async (req, res) => {
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
+    let sorted;
+    if (!isSorted) {
+      const normalizedQuery = searchValue.trim().toLowerCase();
+      sorted = data.sort((a, b) => {
+        const aTitle = (a.title || "").toLowerCase();
+        const bTitle = (b.title || "").toLowerCase();
+        const aIndex = aTitle.indexOf(normalizedQuery);
+        const bIndex = bTitle.indexOf(normalizedQuery);
 
-    const normalizedQuery = searchValue.trim().toLowerCase();
-    const sorted = data.sort((a, b) => {
-      const aTitle = (a.title || "").toLowerCase();
-      const bTitle = (b.title || "").toLowerCase();
-      const aIndex = aTitle.indexOf(normalizedQuery);
-      const bIndex = bTitle.indexOf(normalizedQuery);
-
-      if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
-      if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
-      if (aIndex !== bIndex) return aIndex - bIndex;
-      return aTitle.length - bTitle.length;
-    });
+        if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
+        if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        return aTitle.length - bTitle.length;
+      });
+    }else{
+      sorted = data;
+    }
 
     return httpResponses.ok(res, sorted);
   } catch (error) {
