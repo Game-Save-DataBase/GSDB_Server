@@ -86,7 +86,6 @@ router.get('/search', async (req, res) => {
         query.sort = req.query.sort; isSorted = true;
       }
     }
-    console.log(query)
     const data = await findByQuery(query, 'user');
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
