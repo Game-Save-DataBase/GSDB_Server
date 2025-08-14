@@ -42,43 +42,79 @@ async function localGameSearch(req, res, query) {
   if (results.length === 0) {
     return httpResponses.noContent(res, 'No coincidences');
   }
-  results.sort((a, b) => a.gameID - b.gameID);
   return httpResponses.ok(res, results.length === 1 ? results[0] : results);
 }
-
-// Extraemos función que solo devuelve datos
-async function externalGameSearch(query) {
+// Función principal de búsqueda híbrida
+async function externalGameSearch(req, res, query, modelName = 'Game') {
   let limit = 50;
   let offset = 0;
+  let sort = {};
 
+  // Extraer limit
   if (query.limit) {
     const parsedLimit = parseInt(query.limit);
     if (!isNaN(parsedLimit) && parsedLimit > 0) limit = parsedLimit;
     delete query.limit;
   }
 
+  // Extraer offset
   if (query.offset) {
     const parsedOffset = parseInt(query.offset);
     if (!isNaN(parsedOffset) && parsedOffset >= 0) offset = parsedOffset;
     delete query.offset;
   }
 
+  //TO DO: Esto no entrara asi en la query. Entraria como sort:{campo:{orden}}
+  // Extraer sort
+  if (query.sort && typeof query.sort === 'object') {
+    sort = { value: query.sort.value, order: query.sort.order };
+  }
+
+  // Extraer complete
   let complete = true;
   if ('complete' in query) {
     complete = !(query.complete === 'false' || query.complete === false);
     delete query.complete;
   }
 
-  const igdbResults = await searchGamesFromIGDB({
-    query,
-    limit,
-    offset,
-    complete
-  });
+  const isLocalSort = sort.value ? hasLocalFields({ [sort.value]: true }, modelName) : false;
 
-  return igdbResults;
+  let results = [];
+
+  if (isLocalSort) {
+    results = await localGameSearch(req, res, query);
+
+    // 3️⃣ Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
+    if (results.length < limit + offset) {
+      const ignoredIDs = results.map(r => r.IGDB_ID);
+      const remainingLimit = limit + offset - results.length;
+
+      //TO DO: No me convence esto de los parametros del search
+      //TO DO: Transformar sort a igdb
+      const igdbResults = await searchGamesFromIGDB({
+        query,
+        limit: remainingLimit,
+        offset: 0, // empezamos desde 0 porque ya filtramos los que tenemos
+        sort,
+        complete,
+        ignoredIDs
+      });
+
+      results = results.concat(igdbResults);
+    }
+  } else {
+    //TO DO: Transformar sort a igdb
+    results = await searchGamesFromIGDB({
+      query,
+      limit,
+      offset,
+      sort,
+      complete
+    });
+  }
+
+  return results;
 }
-
 
 /**
  * @route GET api/games
@@ -91,8 +127,6 @@ router.get('/', async (req, res) => {
     const query = { ...req.query };
     const isExternal = (!query.external || query.external === 'true' || query.external === true)
     delete query.external;
-    // Detectamos si external está explícitamente a 'false' (string) -> buscamos solo en mongodb
-    // if (!isExternal) {
     if (!isExternal || hasLocalFields(query, 'game')) {
       delete query.complete;
       return await localGameSearch(req, res, query)
