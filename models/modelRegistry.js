@@ -93,7 +93,7 @@ const modelRegistry = {
             release_date: 'first_release_date',
             platformID: 'platforms'
         },
-        localFields: ['saveID', 'userFav'],
+        localFields: ['saveID', 'userFav', 'external', 'saveLocations','nUploads', 'lastUpdate'],
     },
     comment: {
         model: require('./Comments').Comments,

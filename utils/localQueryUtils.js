@@ -20,7 +20,9 @@ async function findByQuery(query, modelName) {
 
     let limit = 50;
     let offset = 0;
+    let sortObj = null;
 
+    // Extraer limit offset y sort
     if (query.limit) {
         const parsedLimit = parseInt(query.limit);
         if (!isNaN(parsedLimit) && parsedLimit > 0) limit = parsedLimit;
@@ -33,14 +35,35 @@ async function findByQuery(query, modelName) {
         delete query.offset;
     }
 
+    if (query.sort && typeof query.sort === 'object') {
+        const sortOrderKey = Object.keys(query.sort)[0];
+        const sortField = query.sort[sortOrderKey];
+        // Validar que el campo esté permitido
+        if (modelDef.filterFields[sortField]) {
+            sortObj = { [sortField]: sortOrderKey.toLowerCase() === 'asc' ? 1 : -1 };
+        }else{
+            throw new Error(`cannot sort ${modelName} by ${sortField}: field does not exist`);
+        }
+
+    }
+    delete query.sort;
+
     try {
         const filter = await buildMongoFilter(query, modelName, []);
-        const results = await modelDef.model
-            .find(filter)
-            .sort({ [modelDef.foreignKey]: -1 })
+        let mongoQuery = modelDef.model.find(filter);
+
+        // Aplicar sort si existe, si no ordenar por id
+        if (sortObj) {
+            mongoQuery = mongoQuery.sort(sortObj);
+        } else {
+            mongoQuery = mongoQuery.sort({ [modelDef.foreignKey]: -1 }); // Orden por id descendente
+        }
+
+        const results = await mongoQuery
             .skip(offset)
             .limit(limit)
             .lean();
+
         return results;
     } catch (err) {
         throw {
@@ -50,6 +73,7 @@ async function findByQuery(query, modelName) {
         };
     }
 }
+
 
 /**
  * 
