@@ -164,6 +164,8 @@ router.get('/search', async (req, res) => {
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
     delete req.query.fast;
+    let sortField, sortOrder;
+    let isSorted = false;
     const query = {
       complete: false,
       title: { like: searchValue }
@@ -173,7 +175,17 @@ router.get('/search', async (req, res) => {
     if (offset) query.offset = offset;
     if (req.query.platformID) query.platformID = req.query.platformID;
     if (req.query.release_date) query.release_date = req.query.release_date;
-
+    if (req.query.sort && typeof req.query.sort === 'object') {
+      const modelDef = getModelDefinition('game')
+      sortOrder = Object.keys(req.query.sort)[0];
+      sortField = req.query.sort[sortOrder];
+      query.sort = req.query.sort;
+      isSorted=true
+      if (!modelDef.filterFields[sortField]) {
+        delete query.sort; sortOrder = null; sortField = null;
+        isSorted=false;
+      }
+    }
     const data = await externalGameSearch(req, res, query);
 
     if (!Array.isArray(data) || data.length === 0) {
@@ -181,18 +193,23 @@ router.get('/search', async (req, res) => {
     }
 
     const normalizedQuery = searchValue.trim().toLowerCase();
+    let sorted;
+    if (!isSorted) {
+      //sort predeterminado que prioriza los que se llamen igual
+      sorted = data.sort((a, b) => {
+        const aTitle = a.title.toLowerCase();
+        const bTitle = b.title.toLowerCase();
+        const aIndex = aTitle.indexOf(normalizedQuery);
+        const bIndex = bTitle.indexOf(normalizedQuery);
 
-    const sorted = data.sort((a, b) => {
-      const aTitle = a.title.toLowerCase();
-      const bTitle = b.title.toLowerCase();
-      const aIndex = aTitle.indexOf(normalizedQuery);
-      const bIndex = bTitle.indexOf(normalizedQuery);
-
-      if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
-      if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
-      if (aIndex !== bIndex) return aIndex - bIndex;
-      return aTitle.length - bTitle.length;
-    });
+        if (aTitle.startsWith(normalizedQuery) && !bTitle.startsWith(normalizedQuery)) return -1;
+        if (!aTitle.startsWith(normalizedQuery) && bTitle.startsWith(normalizedQuery)) return 1;
+        if (aIndex !== bIndex) return aIndex - bIndex;
+        return aTitle.length - bTitle.length;
+      });
+    }else{
+      sorted=data;
+    }
 
     return httpResponses.ok(res, sorted);
 
