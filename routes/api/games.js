@@ -89,29 +89,29 @@ async function externalGameSearch(req, res, query, modelName = 'game') {
   }
 
   const isLocalSort = sortField ? hasLocalFields({ [sortField]: true }, modelName) : false;
-  let results = [];
+  let results;
 
   if (isLocalSort) {
     results = await searchLocalGame(query);
     // Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
-    if (results.length < limit + offset) {
-      let ignoredIDs = results.map(r => r.gameID);
-      const remainingLimit = limit + offset - results.length;
+    let ignoredIDs;
+    let remainingLimit = limit + offset;
+    if (results && results.length < limit + offset) {
+      ignoredIDs = results.map(r => r.gameID);
+      remainingLimit = limit + offset - results.length;
       if (!Array.isArray(ignoredIDs)) ignoredIDs = [ignoredIDs]
-      console.log("PARCIALMENTE EXTERNA, SORT:", sortField, sortOrder, ignoredIDs)
-      const igdbResults = await searchGamesFromIGDB({
-        query,
-        limit: remainingLimit,
-        offset: 0, // empezamos desde 0 porque ya filtramos los que tenemos
-        sort: null,
-        complete,
-        ignoredIDs
-      });
-
-      results = results.concat(igdbResults);
     }
+    const igdbResults = await searchGamesFromIGDB({
+      query,
+      limit: remainingLimit,
+      offset: 0, // empezamos desde 0 porque ya filtramos los que tenemos
+      sort: null,
+      complete,
+      ignoredIDs
+    });
+    if (results) results.concat(igdbResults);
+    else results = igdbResults;
   } else {
-    console.log(modelDef.igdbFilterFields[sortField], modelDef.igdbFilterFields, sortField)
     delete query.sort;
     results = await searchGamesFromIGDB({
       query,
@@ -141,6 +141,7 @@ router.get('/', async (req, res) => {
       return await localGameSearch(req, res, query)
     }
     const results = await externalGameSearch(req, res, query);
+    console.log("llega hasta aqui")
 
     if (results.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');

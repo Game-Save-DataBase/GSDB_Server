@@ -232,7 +232,6 @@ function normalizeStr(str) {
  * @returns {Promise<Array<Game>>}
  */
 async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, complete = true, ignoredIDs = null}) {
-    console.log(query, sort)
     const { platformID, ...restQuery } = query;
     // Mapear platformIDs si vienen
     const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
@@ -293,7 +292,6 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, comple
         where ${finalWhere};
         sort ${sortClause};
     `;
-    console.log(igdbQuery)
     const igdbResultsRaw = await callIGDB('games', igdbQuery);
     const enrichedGames = await Promise.all(
         igdbResultsRaw.map(game => createGameFromIGDB(game, complete))
@@ -327,11 +325,11 @@ async function createGameFromIGDB(game, complete = true, external = true, select
 
     const coverURL = cover?.image_id
         ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${cover.image_id}.jpg`
-        : config.paths.gameCover_default;
+        : undefined;
     const screenshotURL = complete ?
         Array.isArray(screenshots) && screenshots[0]?.image_id
             ? `https://images.igdb.com/igdb/image/upload/t_1080p/${screenshots[0].image_id}.jpg`
-            : config.paths.banner_default
+            : undefined
         : undefined
 
     //PLATAFORMAS CON NUESTROS ID
