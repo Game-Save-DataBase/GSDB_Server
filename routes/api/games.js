@@ -93,14 +93,17 @@ async function externalGameSearch(req, res, query, modelName = 'game') {
 
   if (isLocalSort) {
     results = await searchLocalGame(query);
+    if (!Array.isArray(results)) results = results ? [results] : [];
+
     // Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
     let ignoredIDs;
     let remainingLimit = limit + offset;
-    if (results && results.length < limit + offset) {
+    if (results.length < limit + offset) {
       ignoredIDs = results.map(r => r.gameID);
+      if (!Array.isArray(ignoredIDs)) ignoredIDs = [ignoredIDs];
       remainingLimit = limit + offset - results.length;
-      if (!Array.isArray(ignoredIDs)) ignoredIDs = [ignoredIDs]
     }
+
     const igdbResults = await searchGamesFromIGDB({
       query,
       limit: remainingLimit,
@@ -109,8 +112,8 @@ async function externalGameSearch(req, res, query, modelName = 'game') {
       complete,
       ignoredIDs
     });
-    if (results) results.concat(igdbResults);
-    else results = igdbResults;
+
+    results = results.concat(igdbResults || []);
   } else {
     delete query.sort;
     results = await searchGamesFromIGDB({
@@ -141,7 +144,6 @@ router.get('/', async (req, res) => {
       return await localGameSearch(req, res, query)
     }
     const results = await externalGameSearch(req, res, query);
-    console.log("llega hasta aqui")
 
     if (results.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');

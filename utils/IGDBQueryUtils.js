@@ -274,7 +274,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, comple
     if (whereString) {
         baseConditions.push(whereString);
     }
-    if(ignoredIDs){
+    if(ignoredIDs && ignoredIDs.length>0){
         baseConditions.push(`id != (${ignoredIDs.join(',')})`)
     }
 
