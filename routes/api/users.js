@@ -5,7 +5,7 @@ const blockIfNotDev = require('../../middleware/devModeMW');
 const { findByID, findByQuery } = require('../../utils/localQueryUtils');
 const { Users } = require('../../models/Users');
 const { Games } = require('../../models/Games');
-const { hasStaticFields } = require('../../models/modelRegistry');
+const { hasStaticFields, getModelDefinition } = require('../../models/modelRegistry');
 const httpResponses = require('../../utils/httpResponses');
 const bcrypt = require('bcryptjs');
 const { uploadUserImage } = require('../../config/multer');
@@ -54,6 +54,7 @@ router.get('/search', async (req, res) => {
     const fast = req.query.fast;
     delete req.query.fast;
     let query;
+    let isSorted = false; let sortOrder; let sortField;
 
     if (!fast) {
       query = {
@@ -75,36 +76,50 @@ router.get('/search', async (req, res) => {
       if (req.query.verified) query.verified = req.query.verified;
       if (req.query.rating) query.rating = req.query.rating;
     }
-
+    if (req.query.sort && typeof req.query.sort === 'object') {
+      const modelDef = getModelDefinition('user')
+      sortOrder = Object.keys(req.query.sort)[0];
+      sortField = req.query.sort[sortOrder];
+      if (!modelDef.filterFields[sortField]) {
+        sortOrder = null; sortField = null;
+      } else {
+        query.sort = req.query.sort; isSorted = true;
+      }
+    }
+    console.log(query)
     const data = await findByQuery(query, 'user');
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
+    let sorted;
+    if (!isSorted) {
+      const normalizedQuery = searchValue.trim().toLowerCase();
+      sorted = data.sort((a, b) => {
+        const aUserName = (a.userName || "").toLowerCase();
+        const bUserName = (b.userName || "").toLowerCase();
+        const aAlias = (a.alias || "").toLowerCase();
+        const bAlias = (b.alias || "").toLowerCase();
 
-    const normalizedQuery = searchValue.trim().toLowerCase();
-    const sorted = data.sort((a, b) => {
-      const aUserName = (a.userName || "").toLowerCase();
-      const bUserName = (b.userName || "").toLowerCase();
-      const aAlias = (a.alias || "").toLowerCase();
-      const bAlias = (b.alias || "").toLowerCase();
+        const aIndexUser = aUserName.indexOf(normalizedQuery);
+        const bIndexUser = bUserName.indexOf(normalizedQuery);
 
-      const aIndexUser = aUserName.indexOf(normalizedQuery);
-      const bIndexUser = bUserName.indexOf(normalizedQuery);
+        if (aUserName.startsWith(normalizedQuery) && !bUserName.startsWith(normalizedQuery)) return -1;
+        if (!aUserName.startsWith(normalizedQuery) && bUserName.startsWith(normalizedQuery)) return 1;
+        if (aIndexUser !== bIndexUser) return aIndexUser - bIndexUser;
 
-      if (aUserName.startsWith(normalizedQuery) && !bUserName.startsWith(normalizedQuery)) return -1;
-      if (!aUserName.startsWith(normalizedQuery) && bUserName.startsWith(normalizedQuery)) return 1;
-      if (aIndexUser !== bIndexUser) return aIndexUser - bIndexUser;
+        // Fallback: alias
+        const aIndexAlias = aAlias.indexOf(normalizedQuery);
+        const bIndexAlias = bAlias.indexOf(normalizedQuery);
 
-      // Fallback: alias
-      const aIndexAlias = aAlias.indexOf(normalizedQuery);
-      const bIndexAlias = bAlias.indexOf(normalizedQuery);
+        if (aAlias.startsWith(normalizedQuery) && !bAlias.startsWith(normalizedQuery)) return -1;
+        if (!aAlias.startsWith(normalizedQuery) && bAlias.startsWith(normalizedQuery)) return 1;
+        if (aIndexAlias !== bIndexAlias) return aIndexAlias - bIndexAlias;
 
-      if (aAlias.startsWith(normalizedQuery) && !bAlias.startsWith(normalizedQuery)) return -1;
-      if (!aAlias.startsWith(normalizedQuery) && bAlias.startsWith(normalizedQuery)) return 1;
-      if (aIndexAlias !== bIndexAlias) return aIndexAlias - bIndexAlias;
-
-      return aAlias.length - bAlias.length;
-    });
+        return aAlias.length - bAlias.length;
+      });
+    } else {
+      sorted = data;
+    }
 
     return httpResponses.ok(res, sorted);
   } catch (error) {
