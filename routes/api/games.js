@@ -8,8 +8,9 @@ const { searchGamesFromIGDB, createGameFromIGDB } = require('../../utils/IGDBQue
 const { Games } = require('../../models/Games');
 const httpResponses = require('../../utils/httpResponses');
 const { callIGDB } = require('../../services/igdbServices')
-const { hasLocalFields } = require('../../models/modelRegistry');
+const { hasLocalFields, getModelDefinition } = require('../../models/modelRegistry');
 const { Platforms } = require('../../models/Platforms');
+const { model } = require('mongoose');
 
 
 /**
@@ -26,30 +27,37 @@ const { Platforms } = require('../../models/Platforms');
  */
 router.get('/test', blockIfNotDev, (req, res) => httpResponses.ok(res, 'game route testing!'));
 
-
-async function localGameSearch(req, res, query) {
+async function searchLocalGame(query) {
   // Buscar por id si viene en la query
   const fastResult = await findByID(query, 'game');
   if (fastResult !== undefined) {
-    if (!fastResult) {
-      return httpResponses.noContent(res, 'No coincidences');
-    }
-    return httpResponses.ok(res, fastResult);
+    return fastResult ? fastResult : null;
   }
 
   // Buscar por query completo
   const results = await findByQuery(query, 'game');
   if (results.length === 0) {
+    return null;
+  }
+
+  return results.length === 1 ? results[0] : results;
+}
+
+async function localGameSearch(req, res, query) {
+  const data = await searchLocalGame(query);
+
+  if (!data) {
     return httpResponses.noContent(res, 'No coincidences');
   }
-  return httpResponses.ok(res, results.length === 1 ? results[0] : results);
+  return httpResponses.ok(res, data);
 }
+
 // Función principal de búsqueda híbrida
-async function externalGameSearch(req, res, query, modelName = 'Game') {
+async function externalGameSearch(req, res, query, modelName = 'game') {
   let limit = 50;
   let offset = 0;
-  let sort = {};
-
+  let sortField, sortOrder;
+  const modelDef = getModelDefinition(modelName)
   // Extraer limit
   if (query.limit) {
     const parsedLimit = parseInt(query.limit);
@@ -64,10 +72,13 @@ async function externalGameSearch(req, res, query, modelName = 'Game') {
     delete query.offset;
   }
 
-  //TO DO: Esto no entrara asi en la query. Entraria como sort:{campo:{orden}}
-  // Extraer sort
   if (query.sort && typeof query.sort === 'object') {
-    sort = { value: query.sort.value, order: query.sort.order };
+    sortOrder = Object.keys(query.sort)[0];
+    sortField = query.sort[sortOrder];
+    // Validar que el campo esté permitido
+    if (!modelDef.filterFields[sortField]) {
+      throw new Error(`cannot sort ${modelName} by ${sortField}: field does not exist`);
+    }
   }
 
   // Extraer complete
@@ -77,25 +88,22 @@ async function externalGameSearch(req, res, query, modelName = 'Game') {
     delete query.complete;
   }
 
-  const isLocalSort = sort.value ? hasLocalFields({ [sort.value]: true }, modelName) : false;
-
+  const isLocalSort = sortField ? hasLocalFields({ [sortField]: true }, modelName) : false;
   let results = [];
 
   if (isLocalSort) {
-    results = await localGameSearch(req, res, query);
-
-    // 3️⃣ Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
+    results = await searchLocalGame(query);
+    // Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
     if (results.length < limit + offset) {
-      const ignoredIDs = results.map(r => r.IGDB_ID);
+      let ignoredIDs = results.map(r => r.gameID);
       const remainingLimit = limit + offset - results.length;
-
-      //TO DO: No me convence esto de los parametros del search
-      //TO DO: Transformar sort a igdb
+      if (!Array.isArray(ignoredIDs)) ignoredIDs = [ignoredIDs]
+      console.log("PARCIALMENTE EXTERNA, SORT:", sortField, sortOrder, ignoredIDs)
       const igdbResults = await searchGamesFromIGDB({
         query,
         limit: remainingLimit,
         offset: 0, // empezamos desde 0 porque ya filtramos los que tenemos
-        sort,
+        sort: null,
         complete,
         ignoredIDs
       });
@@ -103,12 +111,13 @@ async function externalGameSearch(req, res, query, modelName = 'Game') {
       results = results.concat(igdbResults);
     }
   } else {
-    //TO DO: Transformar sort a igdb
+    console.log(modelDef.igdbFilterFields[sortField], modelDef.igdbFilterFields, sortField)
+    delete query.sort;
     results = await searchGamesFromIGDB({
       query,
       limit,
       offset,
-      sort,
+      sort: modelDef.igdbFilterFields[sortField] ? `${modelDef.igdbFilterFields[sortField]} ${sortOrder}` : null,
       complete
     });
   }
@@ -131,7 +140,7 @@ router.get('/', async (req, res) => {
       delete query.complete;
       return await localGameSearch(req, res, query)
     }
-    const results = await externalGameSearch(query);
+    const results = await externalGameSearch(req, res, query);
 
     if (results.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
@@ -159,10 +168,10 @@ router.get('/search', async (req, res) => {
 
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
-    if(req.query.platformID) query.platformID = req.query.platformID;
-    if(req.query.release_date) query.release_date = req.query.release_date;
+    if (req.query.platformID) query.platformID = req.query.platformID;
+    if (req.query.release_date) query.release_date = req.query.release_date;
 
-    const data = await externalGameSearch(query);
+    const data = await externalGameSearch(req, res, query);
 
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');

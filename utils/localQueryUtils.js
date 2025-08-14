@@ -36,12 +36,13 @@ async function findByQuery(query, modelName) {
     }
 
     if (query.sort && typeof query.sort === 'object') {
-        const sortField = Object.keys(query.sort)[0];
-        const sortOrderKey = Object.keys(query.sort[sortField])[0]; 
-
+        const sortOrderKey = Object.keys(query.sort)[0];
+        const sortField = query.sort[sortOrderKey];
         // Validar que el campo esté permitido
-        if (modelDef.filterFields && modelDef.filterFields.includes(sortField)) {
+        if (modelDef.filterFields[sortField]) {
             sortObj = { [sortField]: sortOrderKey.toLowerCase() === 'asc' ? 1 : -1 };
+        }else{
+            throw new Error(`cannot sort ${modelName} by ${sortField}: field does not exist`);
         }
 
     }

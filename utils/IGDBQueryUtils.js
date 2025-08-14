@@ -231,7 +231,8 @@ function normalizeStr(str) {
  * @param {boolean} params.complete - If true, fetch extra data.
  * @returns {Promise<Array<Game>>}
  */
-async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort = {}, complete = true }) {
+async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, complete = true, ignoredIDs = null}) {
+    console.log(query, sort)
     const { platformID, ...restQuery } = query;
     // Mapear platformIDs si vienen
     const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
@@ -274,6 +275,9 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort = {}, c
     if (whereString) {
         baseConditions.push(whereString);
     }
+    if(ignoredIDs){
+        baseConditions.push(`id != (${ignoredIDs.join(',')})`)
+    }
 
     // Si no se filtró explícitamente por plataformas, aplicar las conocidas por defecto
     if (!whereString || !whereString.includes("platforms")) {
@@ -281,11 +285,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort = {}, c
     }
 
     const finalWhere = baseConditions.join(' & ');
-    let sortClause = 'rating_count desc'; // valor por defecto
-    if (sort.value && sort.order) {
-        const order = sort.order.toLowerCase() === 'asc' ? 'asc' : 'desc';
-        sortClause = `${sort.value} ${order}`;
-    }
+    let sortClause = sort || 'rating_count desc'; // valor por defecto
     const igdbQuery = `
         fields name, cover.image_id, screenshots.image_id, platforms, slug, id, url, first_release_date;
         limit ${limit};
@@ -293,11 +293,12 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort = {}, c
         where ${finalWhere};
         sort ${sortClause};
     `;
+    console.log(igdbQuery)
     const igdbResultsRaw = await callIGDB('games', igdbQuery);
     const enrichedGames = await Promise.all(
         igdbResultsRaw.map(game => createGameFromIGDB(game, complete))
     );
-    return enrichedGames.sort((a, b) => a.IGDB_ID - b.IGDB_ID);
+    return enrichedGames;
 }
 
 const validPlatforms = [65, 45, 44, 27]; // Windows, Mac, Linux, DOS
