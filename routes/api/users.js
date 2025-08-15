@@ -217,7 +217,11 @@ router.post('/add-favorite', authenticateMW, async (req, res) => {
       }
       let game = await Games.findOne({ gameID: gameIDNum });
       if (!game) {
-        let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: gameIDNum });
+        let resPost = await axios.post(`${config.connection}${config.api.games}/igdb`, { IGDB_ID: gameIDNum }, {
+          headers: {
+            'X-Internal-Token': process.env.INTERNAL_MW_KEY
+          }
+        });
         if (resPost.data.count <= 0) {
           return httpResponses.notFound(res, `Game with gameID ${gameIDNum} or not follow GSDB criteria`);
         }
