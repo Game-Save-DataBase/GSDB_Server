@@ -118,7 +118,7 @@ router.get('/search', async (req, res) => {
         if (aIndex !== bIndex) return aIndex - bIndex;
         return aTitle.length - bTitle.length;
       });
-    }else{
+    } else {
       sorted = data;
     }
 
@@ -135,7 +135,7 @@ router.get('/search', async (req, res) => {
 async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   if (!file) throw new Error('No savefile uploaded');
 
-  const { gameID, tagID, platformID, title, description } = body;
+  const { gameID, tagID, platformID, title, description, metadata, metadataDesc } = body;
   const tagsArray = Array.isArray(tagID) ? tagID : [tagID];
   const userID = user.userID;
 
@@ -143,7 +143,7 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
   if (!game) throw new Error('Game not found');
 
-  const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray });
+  const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray, metadata, metadataDesc });
   const saveID = tempSaveData.saveID.toString();
   const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID);
   if (!fs.existsSync(uploadPath)) {
@@ -270,15 +270,20 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
     if (!file) throw new Error('No savefile uploaded');
 
 
-    const { gameID, tagID, platformID, title, description } = body;
+    const { gameID, tagID, platformID, title, description, metadata, metadataDesc } = body;
     const tagsArray = Array.isArray(tagID) ? tagID : [tagID];
     const userID = user.userID;
+    const metadataParsed = metadata ? JSON.parse(metadata) : {};
+    const metadataDescParsed = metadataDesc ? JSON.parse(metadataDesc) : {};
 
     if (!gameID) throw new Error('Missing gameID');
     const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`);
     if (!game) throw new Error('Game not found');
 
-    const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray });
+    const tempSaveData = await SaveDatas.create({
+      userID, gameID, platformID, title, description, tagID: tagsArray, metadata: metadataParsed,
+      metadataDesc: metadataDescParsed
+    });
     const saveID = tempSaveData.saveID.toString();
     const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
     if (!fs.existsSync(uploadPath)) {

@@ -156,7 +156,7 @@ function separateFilters(query, allowedKeys) {
     const directFilters = {};
 
     for (const key in query) {
-        if (key.includes('.')) {
+        if (key.includes('.') && !key.includes('metadata')) {
             const [relation, ...rest] = key.split('.');
             const inner = rest.join('.');
             if (!relationalFilters[relation]) relationalFilters[relation] = {};
