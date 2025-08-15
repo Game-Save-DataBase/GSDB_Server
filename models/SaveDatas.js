@@ -25,12 +25,30 @@ const SavesSchema = new mongoose.Schema({
   nDownloads: { type: Number, default: 0 },
   likes: { type: [Number], default: [] }, //array de userID unicos
   dislikes: { type: [Number], default: [] }, //array de userID unicos
+  nLikes: {type:Number, default:0},
+  nDislikes: {type:Number, default:0},
   rating: { type: Number, default: 0 }, //valor ponderado calculado a traves de los likes y dislikes
   tagID: { type: [Number], required: false }, // ids de las tag asociadas a este save
   metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   metadataDesc: { type: Map, of: String, default: {} }
 });
 SavesSchema.plugin(AutoIncrement, { inc_field: 'saveID', start_seq: 0 });
+
+
+
+//para el calculo del rating
+function wilsonScore(likesCount, dislikesCount, z = 1.96) {
+  const n = likesCount + dislikesCount;
+  if (n === 0) return 0;
+  const p = likesCount / n;
+  const denominator = 1 + (z ** 2) / n;
+  const centre = p + (z ** 2) / (2 * n);
+  const margin = z * Math.sqrt((p * (1 - p) + (z ** 2) / (4 * n)) / n);
+  const lowerBound = (centre - margin) / denominator;
+  return lowerBound * 100;
+}
+
+
 
 let saveToDelete = null;
 SavesSchema.pre('deleteOne', { document: false, query: true }, async function (next) {
@@ -148,28 +166,31 @@ SavesSchema.post('deleteMany', async function () {
 
 let prevLikes = [];
 let prevDislikes = [];
-
-// Pre-save: guardar arrays anteriores
+// Pre-save: siempre recalcular nLikes, nDislikes y rating
 SavesSchema.pre('save', async function (next) {
-  if (!this.isModified('likes') && !this.isModified('dislikes')) {
-    return next();
-  }
-
-  try {
-    if (!this.isNew) {
+  if (!this.isNew) {
+    try {
       const existing = await this.constructor.findById(this._id).lean();
       prevLikes = existing?.likes || [];
       prevDislikes = existing?.dislikes || [];
-    } else {
+    } catch (err) {
+      console.error('Error fetching previous likes/dislikes:', err);
       prevLikes = [];
       prevDislikes = [];
     }
-  } catch (err) {
-    console.error('Error fetching previous likes/dislikes:', err);
+  } else {
+    prevLikes = [];
+    prevDislikes = [];
   }
+
+  // Ahora que ya tienes los likes/dislikes actuales:
+  this.nLikes = this.likes.length;
+  this.nDislikes = this.dislikes.length;
+  this.rating = wilsonScore(this.nLikes, this.nDislikes);
 
   next();
 });
+
 SavesSchema.post('save', async function (doc, next) {
   const { Users } = require('./Users');
 
@@ -194,7 +215,7 @@ SavesSchema.post('save', async function (doc, next) {
         user.nDislikes += diff;
       }
 
-      await user.save(); // aquí se recalcula el rating del usuario
+      await user.save(); // recalcula rating de usuario
     } catch (err) {
       console.error('Error actualizando likes/dislikes en usuario:', err);
     }
