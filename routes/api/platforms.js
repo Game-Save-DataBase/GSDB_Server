@@ -25,7 +25,7 @@ async function syncPlatformsFromIGDB() {
 
     // 3) Consultar plataformas con abbreviation válida
     const platformsQuery = `
-      fields id, abbreviation, generation, name, slug, platform_logo, platform_family, url;
+      fields id, abbreviation, generation, name, slug, versions.platform_logo.url, platform_family, url;
       where abbreviation != null & abbreviation != "";
       sort name asc;
       limit 500;
@@ -44,31 +44,40 @@ async function syncPlatformsFromIGDB() {
     for (const p of igdbPlatforms) {
       const existing = await Platforms.findOne({ abbreviation: p.abbreviation });
 
+      // Obtener la URL del logo desde versions
+      let logoUrl = null;
+      if (Array.isArray(p.versions) && p.versions.length > 0) {
+        // Ordenar por id ascendente
+        const sortedVersions = p.versions.sort((a, b) => a.id - b.id);
+        if (sortedVersions[0].platform_logo?.url) {
+          logoUrl = sortedVersions[0].platform_logo.url
+            .replace('t_thumb', 't_logo_med')
+            .replace('.jpg', '.png');
+        }
+      }
+
       const platformData = {
         IGDB_ID: p.id,
         abbreviation: p.abbreviation,
         generation: p.generation,
         name: p.name,
         slug: p.slug,
-        logo: logoMap.get(p.platform_logo)
-          ? logoMap.get(p.platform_logo).replace('t_thumb', 't_logo_med').replace('.jpg', '.png')
-          : null,
+        logo: logoUrl,
         family: familyMap.get(p.platform_family) || null,
         url: p.url,
       };
 
       if (existing) {
-        // Actualizar existente
         Object.assign(existing, platformData);
         await existing.save();
         updatedCount++;
       } else {
-        // Crear nuevo (esto generará el platformID)
         const newPlatform = new Platforms(platformData);
         await newPlatform.save();
         insertedCount++;
       }
     }
+
 
     return { updatedCount, insertedCount };
 
@@ -123,7 +132,7 @@ router.get('/', async (req, res) => {
  * @desc Sync platforms from IGDB into local database
  * @access dev only
  */
-router.post('/refresh-igdb',checkInternalToken, async (req, res) => {
+router.post('/refresh-igdb', checkInternalToken, async (req, res) => {
   try {
     const result = await syncPlatformsFromIGDB();
     return httpResponses.ok(res, { message: 'Platforms synced successfully', result });
