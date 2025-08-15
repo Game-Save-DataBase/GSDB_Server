@@ -16,7 +16,7 @@ async function scanFileWithVirusTotal(filePath) {
         },
         maxContentLength: Infinity,
         maxBodyLength: Infinity,
-        timeout: 30000,
+        timeout: 60000,
     });
 
     const analysisId = uploadResponse.data.data.id;
