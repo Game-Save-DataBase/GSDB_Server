@@ -12,7 +12,6 @@ module.exports = async function apiKeyMiddleware(req, res, next) {
 
     // Si la solicitud viene de un origen permitido, no se pide API key
     if (origins.includes(origin)) return next();
-
     // Soporte para llamadas internas con token
     if (req.headers['x-internal-token'] === process.env.INTERNAL_MW_KEY) return next();
 

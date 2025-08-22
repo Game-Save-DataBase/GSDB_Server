@@ -140,7 +140,7 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   const userID = user.userID;
 
   if (!gameID) throw new Error('Missing gameID');
-  const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,      {},
+  const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,    
       {
         headers: {
           'X-Internal-Token': process.env.INTERNAL_MW_KEY
@@ -203,7 +203,7 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
 
 
 async function updateGameAfterUpload(gameID, saveID) {
-  let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`,      {},
+  let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`,      
       {
         headers: {
           'X-Internal-Token': process.env.INTERNAL_MW_KEY
@@ -290,7 +290,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
     const metadataDescParsed = metadataDesc ? JSON.parse(metadataDesc) : {};
 
     if (!gameID) throw new Error('Missing gameID');
-    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,      {},
+    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,      
       {
         headers: {
           'X-Internal-Token': process.env.INTERNAL_MW_KEY
