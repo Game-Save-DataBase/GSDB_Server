@@ -3,11 +3,12 @@ const passport = require('passport');
 const { Users: User } = require('../../models/Users');
 const zxcvbn = require('zxcvbn');
 const httpResponses = require('../../utils/httpResponses');
+const allowedOriginsMW = require('../../middleware/allowedOriginsMW');
 
 const router = express.Router();
 
 // User registration
-router.post('/register', async (req, res) => {
+router.post('/register',allowedOriginsMW, async (req, res) => {
   if (req.isAuthenticated()) {
     return httpResponses.badRequest(res, 'Already logged in. Log out to register a new user.');
   }

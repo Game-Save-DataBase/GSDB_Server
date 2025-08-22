@@ -227,6 +227,7 @@ router.get('/defaults/banner', (req, res) => {
 });
 router.get('/defaults/game-cover', (req, res) => {
   const gamecoverPath = path.join(defaultsBasePath, process.env.ASSET_GAMECOVER);
+
   sendFileIfExists(res, gamecoverPath, process.env.ASSET_GAMECOVER);
 }
 );

@@ -16,9 +16,11 @@ const routesUsers = require("./routes/api/users");
 const routesAuth = require("./routes/api/auth");
 const routesTags = require("./routes/api/tags");
 const routesAssets = require("./routes/api/assets");
+const routesApiKeys = require('./routes/api/apikeys');
 
 const { refreshIGDB } = require('./scripts/refreshIGDB');
 const { createAssetsFolders } = require('./scripts/createFolders');
+const apiKeyMiddleware = require('./middleware/apikeyMW');
 
 const app = express();
 const MongoStore = require('connect-mongo');
@@ -28,7 +30,6 @@ const isProduction = process.env.NODE_ENV === 'production';
 // -----------------------------------------
 
 const origins = isProduction ? process.env.PROD_ORIGINS?.split(',').map(o => o.trim()) || [] : process.env.DEV_ORIGINS?.split(',').map(o => o.trim()) || [];
-
 app.use(cors({
   origin: origins,
   credentials: true
@@ -59,6 +60,11 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
+app.use(config.api.apiKeys, routesApiKeys); //va antes porque no requiere api key, sino otros mw. El resto, requiere de api key
+app.use(config.api.assets, routesAssets);
+
+app.use(config.api.api, apiKeyMiddleware);
+
 app.use(config.api.games, routesGames);
 app.use(config.api.platforms, routesPlatforms);
 app.use(config.api.savedatas, routesSaveDatas);
@@ -66,7 +72,6 @@ app.use(config.api.comments, routesComments);
 app.use(config.api.users, routesUsers);
 app.use(config.api.auth, routesAuth);
 app.use(config.api.tags, routesTags);
-app.use(config.api.assets, routesAssets);
 
 app.use(config.paths.assetsFolder, express.static(path.join(__dirname, 'assets')));
 
@@ -81,6 +86,7 @@ app.all(config.api.api + '/*', async (req, res) => {
     code: 404
   });
 });
+console.log(origins)
 
 connectDB()
   .then(() => {

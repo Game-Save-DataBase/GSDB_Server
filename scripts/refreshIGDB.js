@@ -6,7 +6,7 @@ async function refreshIGDB() {
   try {
     const response = await axios.post(
       `${config.connection}${config.api.platforms}/refresh-igdb`,
-      {}, // body vacío o los datos que quieras enviar
+      {},
       {
         headers: {
           'X-Internal-Token': process.env.INTERNAL_MW_KEY

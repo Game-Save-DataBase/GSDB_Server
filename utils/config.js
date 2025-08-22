@@ -36,7 +36,8 @@ const config = {
         info: process.env.API + process.env.API_INFO,//localhost:PORT/api/info
         auth: process.env.API + process.env.API_AUTH,//localhost:PORT/api/auth
         tags: process.env.API + process.env.API_TAGS,//localhost:PORT/api/tags
-        assets: process.env.API + process.env.API_ASSETS//localhost:PORT/api/assets
+        assets: process.env.API + process.env.API_ASSETS,//localhost:PORT/api/assets
+        apiKeys: process.env.API + process.env.API_APIKEYS//localhost:PORT/api/assets
     },
     virusTotal: {
         apiKey: process.env.VT_API_KEY,
