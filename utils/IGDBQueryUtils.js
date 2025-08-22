@@ -239,7 +239,8 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, comple
     for (const p of platforms) {
         map[p.platformID] = p.IGDB_ID;
     }
-    const allPlatformsIDs = platforms.map(p => p.platformID);
+    const allPlatformsIDs = platforms.map(p => p.IGDB_ID);
+    console.log(map)
     if (platformID) {
 
         if (typeof platformID === 'object' && platformID !== null) {
@@ -292,6 +293,7 @@ async function searchGamesFromIGDB({ query, limit = 50, offset = 0, sort, comple
         where ${finalWhere};
         sort ${sortClause};
     `;
+    console.log(igdbQuery)
     const igdbResultsRaw = await callIGDB('games', igdbQuery);
     const enrichedGames = await Promise.all(
         igdbResultsRaw.map(game => createGameFromIGDB(game, complete))

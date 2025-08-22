@@ -257,7 +257,7 @@ router.post('/igdb', checkInternalToken, async (req, res) => {
     }
 
     const platforms = await Platforms.find({}, { platformID: 1, IGDB_ID: 1, _id: 0 });
-    const allPlatformsIDs = platforms.map(p => p.platformID);
+    const allPlatformsIDs = platforms.map(p => p.IGDB_ID);
 
     const gameQuery = `
       fields id, name, cover.image_id, screenshots.image_id, platforms, slug, url, first_release_date;
