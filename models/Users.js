@@ -13,7 +13,7 @@ const AutoIncrement = require('mongoose-sequence')(mongoose);
 
 const bcrypt = require('bcryptjs'); //usamos bcryptjs en lugar de bcrypt porque bcryptjs no tiene dependencias de c++, es todo js.
 const { encrypt, decrypt } = require('../utils/encrypt.js');
-const userAssetsBasePath = path.join(__dirname, '..', config.paths.userProfiles);
+const userAssetsBasePath = (process.env.NODE_ENV === 'production') ?  config.paths.userProfiles : path.join(__dirname, '..', config.paths.userProfiles);
 const { sendNotification } = require('../scripts/sendNotification');
 
 const UserSchema = new mongoose.Schema({

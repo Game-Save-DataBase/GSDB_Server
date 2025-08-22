@@ -7,7 +7,7 @@ const fs = require('fs');
 
 const saveFileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, '../', config.paths.uploads);
+    const uploadPath = (process.env.NODE_ENV === 'production') ? config.paths.uploads : path.join(__dirname, '../', config.paths.uploads);
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }
@@ -34,21 +34,23 @@ const userImageStorage = multer.diskStorage({
     const userId = req.user?.userID;
     if (!userId) return cb(new Error('User not authenticated'));
 
-    const uploadPath = path.join(__dirname, '../', config.paths.userProfiles, userId.toString());
-    if (!fs.existsSync(uploadPath)) {
-      fs.mkdirSync(uploadPath, { recursive: true });
-    }
-    cb(null, uploadPath);
+    const uploadPath = (process.env.NODE_ENV === 'production') ?
+      path.join(config.paths.userProfiles, userId.toString())
+     : path.join(__dirname, '../', config.paths.userProfiles, userId.toString());
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath, { recursive: true });
+}
+cb(null, uploadPath);
   },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase();
-    // Comprobar type aquí mismo para filename
-    const type = req.query.type;
-    if (!type || !['pfp', 'banner'].includes(type)) {
-      return cb(new Error('Invalid or missing type query parameter. Type must be: pfp,banner'));
-    }
-    cb(null, `${type}${ext}`);
+filename: (req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  // Comprobar type aquí mismo para filename
+  const type = req.query.type;
+  if (!type || !['pfp', 'banner'].includes(type)) {
+    return cb(new Error('Invalid or missing type query parameter. Type must be: pfp,banner'));
   }
+  cb(null, `${type}${ext}`);
+}
 });
 
 

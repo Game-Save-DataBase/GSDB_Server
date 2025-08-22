@@ -9,7 +9,7 @@ const AutoIncrement = require('mongoose-sequence')(mongoose);
 const config = require('../utils/config');
 const fs = require('fs/promises');
 const path = require('path');
-const uploadsBasePath = path.join(__dirname, '..', config.paths.uploads);
+const uploadsBasePath = (process.env.NODE_ENV === 'production') ?  config.paths.uploads : path.join(__dirname, '..', config.paths.uploads);
 const { Comments } = require('./Comments');
 
 const SavesSchema = new mongoose.Schema({

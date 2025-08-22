@@ -140,18 +140,20 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
   const userID = user.userID;
 
   if (!gameID) throw new Error('Missing gameID');
-  const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,    
-      {
-        headers: {
-          'X-Internal-Token': process.env.INTERNAL_MW_KEY
-        }
+  const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,
+    {
+      headers: {
+        'X-Internal-Token': process.env.INTERNAL_MW_KEY
       }
-    );
+    }
+  );
   if (!game) throw new Error('Game not found');
 
   const tempSaveData = await SaveDatas.create({ userID, gameID, platformID, title, description, tagID: tagsArray, metadata, metadataDesc });
   const saveID = tempSaveData.saveID.toString();
-  const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID);
+  const uploadPath = (process.env.NODE_ENV === 'production') ?
+    path.join(config.paths.uploads, saveID)
+    : path.join(__dirname, '../', '../', config.paths.uploads, saveID);
   if (!fs.existsSync(uploadPath)) {
     fs.mkdirSync(uploadPath, { recursive: true });
   }
@@ -203,13 +205,13 @@ async function processSaveFileUpload({ file, user, body, screenshots = [] }) {
 
 
 async function updateGameAfterUpload(gameID, saveID) {
-  let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`,      
-      {
-        headers: {
-          'X-Internal-Token': process.env.INTERNAL_MW_KEY
-        }
+  let game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&external=false`,
+    {
+      headers: {
+        'X-Internal-Token': process.env.INTERNAL_MW_KEY
       }
-    );
+    }
+  );
 
   if (!game.data) {
     //lo creamos
@@ -290,7 +292,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
     const metadataDescParsed = metadataDesc ? JSON.parse(metadataDesc) : {};
 
     if (!gameID) throw new Error('Missing gameID');
-    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,      
+    const game = await axios.get(`${config.connection}${config.api.games}?gameID=${gameID}&complete=false`,
       {
         headers: {
           'X-Internal-Token': process.env.INTERNAL_MW_KEY
@@ -304,7 +306,9 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       metadataDesc: metadataDescParsed
     });
     const saveID = tempSaveData.saveID.toString();
-    const uploadPath = path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
+    const uploadPath = (process.env.NODE_ENV === 'production') ?
+      path.join(config.paths.uploads, saveID.toString()) :
+      path.join(__dirname, '../', '../', config.paths.uploads, saveID.toString());
     if (!fs.existsSync(uploadPath)) {
       fs.mkdirSync(uploadPath, { recursive: true });
     }

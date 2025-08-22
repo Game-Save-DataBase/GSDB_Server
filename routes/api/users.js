@@ -331,7 +331,9 @@ router.post('/updateImage', authenticateMW, (req, res) => {
         if (err.code === 'LIMIT_FILE_SIZE') { errmes = 'File size limit exceeded'; }
       }
       // En caso de error, borrar carpeta para no dejar huérfanos
-      const userFolder = path.join(__dirname, '../', config.paths.userProfiles, loggedUser.userID);
+      const userFolder = (process.env.NODE_ENV === 'production') ? 
+      path.join(config.paths.userProfiles, loggedUser.userID):
+      path.join(__dirname, '../', config.paths.userProfiles, loggedUser.userID);
       try {
         await fs.rm(userFolder, { recursive: true, force: true });
       } catch (fsErr) {
@@ -363,9 +365,6 @@ router.put('/', authenticateMW, async (req, res) => {
   }
 });
 
-
-
-const usersRoot = path.join(__dirname, '..', '..', config.paths.userProfiles);
 
 // DELETE api/users
 router.delete('/', authenticateMW, async (req, res) => {
