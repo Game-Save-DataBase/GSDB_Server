@@ -156,7 +156,7 @@ router.get('/savedata/:id', checkLoggedUserMW, async (req, res) => {
   const zipFile = findFirstZip(folderPath);
 
   if (!zipFile) {
-    return httpResponses.notFound(res, $`No savedata file found in save directory for ${req.params.id}`);
+    return httpResponses.notFound(res, `No savedata file found in save directory for ${req.params.id}`);
   }
 
   const filePath = path.join(folderPath, zipFile);
