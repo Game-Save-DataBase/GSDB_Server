@@ -3,6 +3,8 @@ const path = require('path');
 const config = require('../utils/config');
 
 function createAssetsFolders() {
+    const isProduction = process.env.NODE_ENV === 'production';
+
     const requiredPaths = [
         config.paths.assetsFolder,
         config.paths.uploads,
@@ -11,7 +13,7 @@ function createAssetsFolders() {
     ];
     console.log("comprobando carpeta de assets...")
     for (const p of requiredPaths) {
-        const absPath = path.join(process.cwd(), p);
+        const absPath = isProduction ? p : path.join(process.cwd(), p);
         if (!fs.existsSync(absPath)) {
             console.log(`No existe ${absPath}, creando...`);
             fs.mkdirSync(absPath, { recursive: true });
@@ -20,8 +22,8 @@ function createAssetsFolders() {
 
     // Carpeta default dentro del repo (local o prod)
     if (config.paths.default) {
-        const defaultsSrc = path.join(process.cwd(), config.paths.default);
-        const defaultsDest = path.join(process.cwd(), config.paths.defaultsInAssetsFolder);
+        const defaultsSrc = isProduction ? config.paths.default : path.join(process.cwd(), config.paths.default);
+        const defaultsDest = isProduction ? config.paths.defaultsInAssetsFolder : path.join(process.cwd(), config.paths.defaultsInAssetsFolder);
 
         if (fs.existsSync(defaultsSrc)) {
             const files = fs.readdirSync(defaultsSrc);

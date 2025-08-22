@@ -56,10 +56,11 @@ const findFileByBaseName = (folderPath, baseName) => {
   const files = fs.readdirSync(folderPath);
   return files.find(file => path.parse(file).name === baseName) || null;
 };
+    const isProduction = process.env.NODE_ENV === 'production';
 
-const uploadsBasePath = path.join(__dirname, '..', '..', config.paths.uploads)
-const userBasePath = path.join(__dirname, '..', '..', config.paths.userProfiles)
-const defaultsBasePath = path.join(__dirname, '..', '..', config.paths.defaultsInAssetsFolder)
+const uploadsBasePath = isProduction ? config.paths.uploads : path.join(__dirname, '..', '..', config.paths.uploads)
+const userBasePath = isProduction ? config.paths.userProfiles : path.join(__dirname, '..', '..', config.paths.userProfiles)
+const defaultsBasePath = isProduction ? config.paths.defaultsInAssetsFolder : path.join(__dirname, '..', '..', config.paths.defaultsInAssetsFolder)
 
 
 // 3. Savefile screenshots
