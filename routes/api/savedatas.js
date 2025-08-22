@@ -313,7 +313,15 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       args: { game: game.data }
     });
 
-    const vtReport = await scanFileWithVirusTotal(finalFilePath);
+    let vtReport;
+    if (!config.useVirusTotal) {
+      await new Promise(res => setTimeout(res, 5000));
+      vtReport = { data: { attributes: { stats: { malicious: 0, suspicious: 0 } } } };
+    }
+    else {
+      vtReport = await scanFileWithVirusTotal(finalFilePath);
+    }
+
     if (isFileMalicious(vtReport)) {
       // Limpiar archivos
       if (fs.existsSync(file.path)) fs.unlinkSync(file.path);

@@ -2,7 +2,7 @@ const axios = require('axios');
 const config = require('../utils/config');
 
 async function refreshIGDB() {
-  console.log()
+  console.log(' ----Refrescando datos de IGDB...---');
   try {
     const response = await axios.post(
       `${config.connection}${config.api.platforms}/refresh-igdb`,
@@ -18,7 +18,12 @@ async function refreshIGDB() {
   } catch (error) {
     console.error('Error refreshing IGDB:', error.message || error);
     throw error;
+  } finally {
+    console.log(`----Finalizado refresco de datos de IGDB----`);
+
   }
+
+
 }
 
 module.exports = { refreshIGDB };

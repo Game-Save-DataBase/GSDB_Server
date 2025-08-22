@@ -59,7 +59,7 @@ const findFileByBaseName = (folderPath, baseName) => {
 
 const uploadsBasePath = path.join(__dirname, '..', '..', config.paths.uploads)
 const userBasePath = path.join(__dirname, '..', '..', config.paths.userProfiles)
-const defaultsBasePath = path.join(__dirname, '..', '..', config.paths.defaults)
+const defaultsBasePath = path.join(__dirname, '..', '..', config.paths.defaultsInAssetsFolder)
 
 
 // 3. Savefile screenshots

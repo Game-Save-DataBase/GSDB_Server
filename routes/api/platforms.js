@@ -12,20 +12,10 @@ const checkInternalToken = require('../../middleware/internalMW');
 // Función para sincronizar plataformas de IGDB y actualizar Mongo
 async function syncPlatformsFromIGDB() {
   try {
-    console.log("synking platforms...")
-    // 1) Consultar platform_logos para id -> url
-    const logosQuery = `fields id, url; limit 500;`;
-    const platformLogos = await callIGDB('platform_logos', logosQuery);
-    const logoMap = new Map(platformLogos.map(l => [l.id, l.url]));
+    console.log(' -Sincronizando datos de plataformas');
 
-    // 2) Consultar platform_families para id -> name
-    const familiesQuery = `fields id, name; limit 500;`;
-    const platformFamilies = await callIGDB('platform_families', familiesQuery);
-    const familyMap = new Map(platformFamilies.map(f => [f.id, f.name]));
-
-    // 3) Consultar plataformas con abbreviation válida
     const platformsQuery = `
-      fields id, abbreviation, generation, name, slug, versions.platform_logo.url, platform_family, url;
+      fields id, abbreviation, generation, name, slug, versions.platform_logo.url, platform_family.name, url;
       where abbreviation != null & abbreviation != "";
       sort name asc;
       limit 500;
@@ -36,18 +26,18 @@ async function syncPlatformsFromIGDB() {
       throw new Error('Invalid response from IGDB');
     }
 
-    // 4) Mapear id a url o name para logo y family respectivamente
     let updatedCount = 0;
     let insertedCount = 0;
+    let skippedCount = 0;
 
-    // 4) Insertar o actualizar una a una (para que mongoose-sequence funcione)
+    console.log(' - Comprobando plataformas...');
     for (const p of igdbPlatforms) {
       const existing = await Platforms.findOne({ abbreviation: p.abbreviation });
 
       // Obtener la URL del logo desde versions
       let logoUrl = null;
       if (Array.isArray(p.versions) && p.versions.length > 0) {
-        // Ordenar por id ascendente
+        // Ordenar por id ascendente para tener los primeros logos de la plataforma, no revisiones
         const sortedVersions = p.versions.sort((a, b) => a.id - b.id);
         if (sortedVersions[0].platform_logo?.url) {
           logoUrl = sortedVersions[0].platform_logo.url
@@ -63,21 +53,30 @@ async function syncPlatformsFromIGDB() {
         name: p.name,
         slug: p.slug,
         logo: logoUrl,
-        family: familyMap.get(p.platform_family) || null,
+        family: p.platform_family?.name || null,
         url: p.url,
       };
 
       if (existing) {
-        Object.assign(existing, platformData);
-        await existing.save();
-        updatedCount++;
+        const hasChanges = Object.keys(platformData).some(
+          key => String(existing[key] || '') !== String(platformData[key] || '')
+        );
+
+        if (hasChanges) {
+          Object.assign(existing, platformData);
+          await existing.save();
+          updatedCount++;
+          console.log(`Plataforma actualizada: ${p.abbreviation}`);
+        } else {
+          skippedCount++;
+        }
       } else {
         const newPlatform = new Platforms(platformData);
         await newPlatform.save();
         insertedCount++;
       }
     }
-
+    console.log(`-----Finalizado sincronizacion de plataformas, actualizadas: ${updatedCount}, creadas: ${insertedCount}, sin cambios: ${skippedCount}`);
 
     return { updatedCount, insertedCount };
 
