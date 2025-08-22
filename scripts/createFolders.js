@@ -22,7 +22,7 @@ function createAssetsFolders() {
 
     // Carpeta default dentro del repo (local o prod)
     if (config.paths.default) {
-        const defaultsSrc = isProduction ? config.paths.default : path.join(process.cwd(), config.paths.default);
+        const defaultsSrc = path.join(process.cwd(), config.paths.default);
         const defaultsDest = isProduction ? config.paths.defaultsInAssetsFolder : path.join(process.cwd(), config.paths.defaultsInAssetsFolder);
 
         if (fs.existsSync(defaultsSrc)) {
