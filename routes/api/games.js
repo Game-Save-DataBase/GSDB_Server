@@ -161,17 +161,17 @@ router.get('/', async (req, res) => {
 
 router.get('/search', async (req, res) => {
   try {
-    const searchValue = req.query.q || "";
+    const searchValue = (req.query.q || "").trim();
     const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined;
     const offset = req.query.offset ? parseInt(req.query.offset, 10) : 0;
     delete req.query.fast;
     let sortField, sortOrder;
     let isSorted = false;
-    const query = {
-      complete: false,
-      title: { like: searchValue }
-    };
 
+    const query = { complete: false };
+    if (searchValue !== "") {
+      query.title = { like: searchValue };
+    }
     if (limit) query.limit = limit;
     if (offset) query.offset = offset;
     if (req.query.platformID) query.platformID = req.query.platformID;
@@ -181,14 +181,13 @@ router.get('/search', async (req, res) => {
       sortOrder = Object.keys(req.query.sort)[0];
       sortField = req.query.sort[sortOrder];
       query.sort = req.query.sort;
-      isSorted=true
+      isSorted = true
       if (!modelDef.filterFields[sortField]) {
         delete query.sort; sortOrder = null; sortField = null;
-        isSorted=false;
+        isSorted = false;
       }
     }
     const data = await externalGameSearch(req, res, query);
-
     if (!Array.isArray(data) || data.length === 0) {
       return httpResponses.noContent(res, 'No coincidences');
     }
@@ -208,10 +207,9 @@ router.get('/search', async (req, res) => {
         if (aIndex !== bIndex) return aIndex - bIndex;
         return aTitle.length - bTitle.length;
       });
-    }else{
-      sorted=data;
+    } else {
+      sorted = data;
     }
-
     return httpResponses.ok(res, sorted);
 
   } catch (error) {
