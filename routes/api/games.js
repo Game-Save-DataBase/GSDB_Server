@@ -91,8 +91,10 @@ async function externalGameSearch(req, res, query, modelName = 'game') {
   const isLocalSort = sortField ? hasLocalFields({ [sortField]: true }, modelName) : false;
   let results;
 
+  console.log(isLocalSort)
   if (isLocalSort) {
     results = await searchLocalGame(query);
+    console.log(query)
     if (!Array.isArray(results)) results = results ? [results] : [];
 
     // Si hay menos resultados que los requeridos por limit/offset, buscar en IGDB
@@ -112,7 +114,6 @@ async function externalGameSearch(req, res, query, modelName = 'game') {
       complete,
       ignoredIDs
     });
-
     results = results.concat(igdbResults || []);
   } else {
     delete query.sort;

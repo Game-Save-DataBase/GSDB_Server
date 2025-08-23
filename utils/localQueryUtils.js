@@ -41,7 +41,7 @@ async function findByQuery(query, modelName) {
         // Validar que el campo esté permitido
         if (modelDef.filterFields[sortField]) {
             sortObj = { [sortField]: sortOrderKey.toLowerCase() === 'asc' ? 1 : -1 };
-        }else{
+        } else {
             throw new Error(`cannot sort ${modelName} by ${sortField}: field does not exist`);
         }
 
@@ -51,14 +51,12 @@ async function findByQuery(query, modelName) {
     try {
         const filter = await buildMongoFilter(query, modelName, []);
         let mongoQuery = modelDef.model.find(filter);
-
         // Aplicar sort si existe, si no ordenar por id
         if (sortObj) {
             mongoQuery = mongoQuery.sort(sortObj);
         } else {
             mongoQuery = mongoQuery.sort({ [modelDef.foreignKey]: -1 }); // Orden por id descendente
         }
-
         const results = await mongoQuery
             .skip(offset)
             .limit(limit)
@@ -252,6 +250,29 @@ function processDirectFilters(directFilters, filterFields) {
     return { andConditions, orConditions };
 }
 
+// Mapeo de letras → todas sus variantes con acentos
+const accentMap = {
+    a: 'aàáâãäåāăąǎǻȁȃȧạảấầẩẫậắằẳẵặ',
+    e: 'eèéêëēĕėęěȅȇẹẻẽếềểễệ',
+    i: 'iìíîïīĭįıǐȉȋịỉĩ',
+    o: 'oòóôõöøōŏőǒȍȏơǫǭọỏốồổỗộớờởỡợ',
+    u: 'uùúûüũūŭůűǔȕȗưụủứừửữự',
+    c: 'cçćĉċč',
+    n: 'nñńņňŉŋ',
+    y: 'yýÿŷȳẏỳỵỷỹ'
+};
+
+// Genera un regex-safe string que ignora acentos
+function accentInsensitiveRegex(str) {
+    return str.split('').map(ch => {
+        const lower = ch.toLowerCase();
+        if (accentMap[lower]) {
+            return `[${accentMap[lower]}]`;
+        }
+        return escapeRegExp(ch);
+    }).join('');
+}
+
 function parseFilterValue(value, type, fieldName = 'unknown') {
     const isArray = type.startsWith('array:');
     const subtype = isArray ? type.split(':')[1] : type;
@@ -264,13 +285,16 @@ function parseFilterValue(value, type, fieldName = 'unknown') {
             try {
                 let v = value[op];
                 if (subtype === 'string' && mongoOp === '$regex') {
-                    const norm = normalizeStr(String(v));
-                    let pattern = norm;
-                    if (op === 'like') pattern = `.*${escapeRegExp(norm)}.*`;
-                    else if (op === 'start') pattern = `^${escapeRegExp(norm)}`;
-                    else if (op === 'end') pattern = `${escapeRegExp(norm)}$`;
+                    const norm = String(v);
+                    let pattern = '';
+                    if (op === 'like') pattern = `.*${accentInsensitiveRegex(norm)}.*`;
+                    else if (op === 'start') pattern = `^${accentInsensitiveRegex(norm)}`;
+                    else if (op === 'end') pattern = `${accentInsensitiveRegex(norm)}$`;
+                    else pattern = accentInsensitiveRegex(norm);
+
                     v = new RegExp(pattern, 'i');
-                } else if ((mongoOp === '$in' || mongoOp === '$nin') && typeof v === 'string') {
+                }
+                else if ((mongoOp === '$in' || mongoOp === '$nin') && typeof v === 'string') {
                     // Split string into array and cast each element
                     v = v.split(',').map(val => castValueByType(val.trim(), subtype));
                 } else {
