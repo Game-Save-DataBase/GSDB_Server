@@ -77,7 +77,9 @@ router.get('/search', async (req, res) => {
       };
     } else {
       query = {
-        title: { like: searchValue }
+        title: { like: searchValue, __or: true },
+        description: { like: searchValue, __or: true },
+        'game.title': { like: searchValue, __or: true },
       };
     }
 
