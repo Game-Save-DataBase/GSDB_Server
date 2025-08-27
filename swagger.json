@@ -3,7 +3,7 @@
   "info": {
     "title": "GSDB API",
     "version": "0.1.0",
-    "description": "\n# GSDB API Documentation\n\n**Authentication:** To use the API, you must provide an API key as a Bearer token.  \nThis token can be obtained in your user profile edit page on the website: [User Area](https://gsdb-web.onrender.com/user-area).  \nInclude it in the header of every request:\n\n`Authorization: Bearer <API_KEY>`\nFor any other information, like how to use query parameters or the different database fields, you can visit the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki)\n"
+    "description": "\n# GSDB API Documentation\n\n**Authentication:** To use the API, you must provide an API key as a Bearer token.  \nThis token can be obtained in your user profile edit page on the website: [User Area](https://gsdb-web.onrender.com/user-area).  \nInclude it in the header of every request:\n\n`Authorization: Bearer <API_KEY>`\n\nFor any other information, like how to use query parameters or the different database fields, you can visit the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki)\n"
   },
   "servers": [
     {

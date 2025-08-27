@@ -17,6 +17,7 @@ This token can be obtained in your user profile edit page on the website: [User 
 Include it in the header of every request:
 
 \`Authorization: Bearer <API_KEY>\`
+
 For any other information, like how to use query parameters or the different database fields, you can visit the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki)
 `
     },
