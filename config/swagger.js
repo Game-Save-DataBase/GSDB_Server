@@ -17,26 +17,7 @@ This token can be obtained in your user profile edit page on the website: [User 
 Include it in the header of every request:
 
 \`Authorization: Bearer <API_KEY>\`
-
-**Query parameters for GET /search:**  
-All basic GET endpoints and /search allow query parameters in the form:
-
-\`?field[operator]=value\`  
-or for array operators:  
-\`?field[operator]=value1,value2,value3\`  
-
-**Operators:**  
-- gt: $gt (greater than)  
-- gte: $gte (greater than or equal)  
-- lt: $lt (less than)  
-- lte: $lte (less than or equal)  
-- eq: $eq (equals)  
-- ne: $ne (not equals)  
-- like: $regex (contains)  
-- start: $regex (starts with)  
-- end: $regex (ends with)  
-- in: $in (in array)  
-- nin: $nin (not in array)
+For any other information, like how to use query parameters or the different database fields, you can visit the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki)
 `
     },
     servers: [

@@ -3,7 +3,7 @@
   "info": {
     "title": "GSDB API",
     "version": "0.1.0",
-    "description": "\n# GSDB API Documentation\n\n**Authentication:** To use the API, you must provide an API key as a Bearer token.  \nThis token can be obtained in your user profile edit page on the website: [User Area](https://gsdb-web.onrender.com/user-area).  \nInclude it in the header of every request:\n\n`Authorization: Bearer <API_KEY>`\n\n**Query parameters for GET /search:**  \nAll basic GET endpoints and /search allow query parameters in the form:\n\n`?field[operator]=value`  \nor for array operators:  \n`?field[operator]=value1,value2,value3`  \n\n**Operators:**  \n- gt: $gt (greater than)  \n- gte: $gte (greater than or equal)  \n- lt: $lt (less than)  \n- lte: $lte (less than or equal)  \n- eq: $eq (equals)  \n- ne: $ne (not equals)  \n- like: $regex (contains)  \n- start: $regex (starts with)  \n- end: $regex (ends with)  \n- in: $in (in array)  \n- nin: $nin (not in array)\n"
+    "description": "\n# GSDB API Documentation\n\n**Authentication:** To use the API, you must provide an API key as a Bearer token.  \nThis token can be obtained in your user profile edit page on the website: [User Area](https://gsdb-web.onrender.com/user-area).  \nInclude it in the header of every request:\n\n`Authorization: Bearer <API_KEY>`\nFor any other information, like how to use query parameters or the different database fields, you can visit the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki)\n"
   },
   "servers": [
     {
