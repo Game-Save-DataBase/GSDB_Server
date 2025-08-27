@@ -19,7 +19,7 @@ const { SaveDatas } = require('../../models/SaveDatas');
 
 
 // Ruta de test, dev mode
-router.get('/test', blockIfNotDev, (req, res) => res.send('user route testing!'));
+router.get('/test', (req, res) => res.send('user route testing!'));
 
 // GET api/users
 router.get('/', async (req, res) => {

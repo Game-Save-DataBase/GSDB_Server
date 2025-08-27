@@ -1,0 +1,465 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GSDB API",
+    "version": "0.1.0",
+    "description": "\n# GSDB API Documentation\n\n**Authentication:** To use the API, you must provide an API key as a Bearer token.  \nThis token can be obtained in your user profile edit page on the website: [User Area](https://gsdb-web.onrender.com/user-area).  \nInclude it in the header of every request:\n\n`Authorization: Bearer <API_KEY>`\n\n**Query parameters for GET /search:**  \nAll basic GET endpoints and /search allow query parameters in the form:\n\n`?field[operator]=value`  \nor for array operators:  \n`?field[operator]=value1,value2,value3`  \n\n**Operators:**  \n- gt: $gt (greater than)  \n- gte: $gte (greater than or equal)  \n- lt: $lt (less than)  \n- lte: $lte (less than or equal)  \n- eq: $eq (equals)  \n- ne: $ne (not equals)  \n- like: $regex (contains)  \n- start: $regex (starts with)  \n- end: $regex (ends with)  \n- in: $in (in array)  \n- nin: $nin (not in array)\n"
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "API base path"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API_KEY"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/api/users/test": {
+      "get": {
+        "summary": "Test route for users",
+        "description": "Returns a test message, only accessible in development mode.",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful test response"
+          }
+        }
+      }
+    },
+    "/api/users": {
+      "post": {
+        "summary": "Create a new user",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "username": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created successfully"
+          },
+          "400": {
+            "description": "Bad request"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update user profile",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "User updated successfully"
+          },
+          "400": {
+            "description": "Invalid fields or request"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a user by ID",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User deleted"
+          },
+          "404": {
+            "description": "User not found"
+          }
+        }
+      }
+    },
+    "/api/users/search": {
+      "get": {
+        "summary": "Search users",
+        "description": "Search users by username, alias, or bio. Supports pagination and sorting.",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search keyword"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Limit number of results"
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Offset for pagination"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of user objects"
+          },
+          "204": {
+            "description": "No matches found"
+          },
+          "400": {
+            "description": "Invalid query"
+          }
+        }
+      }
+    },
+    "/api/users/verify-password": {
+      "post": {
+        "summary": "Verify user password",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password validity result"
+          },
+          "400": {
+            "description": "Password missing"
+          }
+        }
+      }
+    },
+    "/api/users/follow-toggle": {
+      "post": {
+        "summary": "Follow or unfollow another user",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "targetId": {
+                    "type": "integer"
+                  },
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "follow",
+                      "unfollow"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Follow/unfollow result"
+          },
+          "400": {
+            "description": "Invalid parameters"
+          },
+          "404": {
+            "description": "Target user not found"
+          }
+        }
+      }
+    },
+    "/api/users/add-favorite": {
+      "post": {
+        "summary": "Add a game or save to favorites",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "gameID": {
+                    "type": "integer"
+                  },
+                  "saveID": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Favorite added"
+          },
+          "400": {
+            "description": "Invalid parameters"
+          },
+          "404": {
+            "description": "Game or save not found"
+          }
+        }
+      }
+    },
+    "/api/users/remove-favorite": {
+      "post": {
+        "summary": "Remove a game or save from favorites",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "gameID": {
+                    "type": "integer"
+                  },
+                  "saveID": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Favorite removed"
+          },
+          "400": {
+            "description": "Invalid parameters"
+          }
+        }
+      }
+    },
+    "/api/users/updateImage": {
+      "post": {
+        "summary": "Upload or update user profile image",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Image uploaded successfully"
+          },
+          "400": {
+            "description": "Upload error"
+          }
+        }
+      }
+    },
+    "/api/users/notifications": {
+      "get": {
+        "summary": "Get logged user's notifications",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of notifications"
+          }
+        }
+      }
+    },
+    "/api/users/remove-notification": {
+      "delete": {
+        "summary": "Remove a specific notification",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification removed"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        }
+      }
+    },
+    "/api/users/wipe-notifications": {
+      "delete": {
+        "summary": "Remove all notifications",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "All notifications removed"
+          }
+        }
+      }
+    },
+    "/api/users/read-notification": {
+      "patch": {
+        "summary": "Mark a notification as read",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification marked as read"
+          },
+          "404": {
+            "description": "Notification not found"
+          }
+        }
+      }
+    },
+    "/api/users/read-all-notifications": {
+      "patch": {
+        "summary": "Mark all notifications as read",
+        "description": "Requires user to be logged in",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "All notifications marked as read"
+          }
+        }
+      }
+    },
+    "/api/users/dev/wipe": {
+      "delete": {
+        "summary": "Delete all users (development only)",
+        "tags": [
+          "Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "All users deleted"
+          }
+        }
+      }
+    }
+  },
+  "tags": []
+}

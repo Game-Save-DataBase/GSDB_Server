@@ -1,11 +1,12 @@
 {
   "name": "gsdb",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Game Save DataBase",
   "main": "gsdb.js",
   "scripts": {
     "start": "node gsdb.js",
-    "app": "nodemon gsdb.js",
+    "app": "nodemon --ignore swagger.json --ignore '**/*.md' gsdb.js",
+    "swagger:md": "swagger-markdown -i ./swagger.json -o ./routes/api/API.md",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -35,9 +36,13 @@
     "multer": "^1.4.5-lts.2",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "swagger-markdown": "^3.0.0",
+    "widdershins": "^4.0.1"
   }
 }

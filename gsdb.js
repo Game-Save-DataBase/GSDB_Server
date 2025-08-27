@@ -5,6 +5,7 @@ const express = require('express');
 const session = require('express-session');
 const connectDB = require('./config/db');
 const cors = require("cors");
+const swaggerDocs = require("./config/swagger");
 const bodyParser = require("body-parser");
 const path = require('path');
 const passport = require('./config/passport');
@@ -86,7 +87,8 @@ app.all(config.api.api + '/*', async (req, res) => {
     code: 404
   });
 });
-console.log(origins)
+
+swaggerDocs(app);
 
 connectDB()
   .then(() => {
