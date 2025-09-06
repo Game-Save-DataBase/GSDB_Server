@@ -1,4 +1,4 @@
-<img src="./public/assets/logo2.png" alt="GSDB Logo" width="200" />
+<img src="./logo2.png" alt="GSDB Logo" width="200" />
 
 # GSDB - Game Save Database
 GSDB is a platform to preserve and categorize savedata files from any videogame. It uses IGDB and PCGamingWiki API.
