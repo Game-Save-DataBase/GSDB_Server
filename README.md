@@ -1,3 +1,5 @@
+<img src="./public/assets/logo2.png" alt="GSDB Logo" width="200" />
+
 # GSDB - Game Save Database
 GSDB is a platform to preserve and categorize savedata files from any videogame. It uses IGDB and PCGamingWiki API.
 This repository contains the server backend and API for GSDB.
