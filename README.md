@@ -20,6 +20,7 @@ Clone the repository:
 
 ```bash
 git clone https://github.com/Game-Save-DataBase/GSDB_Server.git
+cd GSDB_Server
 ```
 Search for the file `/.env example`. You must fill the empty variables with the environment variables needed. Rename the file to `.env` after.
 > [!WARNING]  
