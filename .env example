@@ -1,0 +1,75 @@
+#THIS IS FILE REQUIRES TO FILL ALL THE VARIABLES TO RUN THE SERVER.
+
+API_VERSION = 0.1
+#...............GSDB SECRET KEYS
+#generated using openssl rand -hex 32
+
+#for session and encrypting
+SECRET_KEY = 
+#to use in the internal middleware
+INTERNAL_MW_KEY = 
+
+#...............GSDB CONNECTION AND PARAMETERS
+#'development', 'production'
+NODE_ENV = 'development' 
+#GSDB prod domain
+DIR_GSDB_PROD =  
+#to build the local domain, use the base and port parameters. Example: http://localhost:8082
+DIR_GSDB = 
+PORT = 
+#allowed origins for development and production modes. http://localhost:8082, http://localhost:3000 
+DEV_ORIGINS=
+PROD_ORIGINS=
+#used in middleware
+DEV_MODE = true 
+
+#...............FOLDER LOCATIONS
+#base
+DIR_ASSETS = "/assets" 
+#DIR_ASSETS/uploads
+DIR_UPLOADS = '/uploads'
+#DIR_ASSETS/users
+DIR_USERS = '/users' 
+#DIR_ASSETS/games
+DIR_GAMES='/games' 
+#DIR_ASSETS/default
+DIR_DEFAULT = "/default"
+
+#..............API ROUTES
+#base
+API = "/api" 
+#DIR_GSDB/api/games
+API_GAMES = "/games" 
+#DIR_GSDB/api/platforms
+API_PLATFORMS = "/platforms" 
+#etc
+API_SAVEDATAS = "/savedatas"
+API_COMMENTS = "/comments"
+API_USERS = "/users"
+API_AUTH = "/auth"
+API_INFO = "/info"
+API_TAGS = "/tags"
+API_ASSETS = "/assets"
+API_APIKEYS = "/apikeys"
+#...............ASSETS -> FILE NAMES OF EACH IMAGE LOCATED IN THE DEFAULTS FOLDER
+#image for the game cover
+ASSET_GAMECOVER = "gameCover.png" 
+ #image for the profile picture
+ASSET_PFP = "pfp.png"
+#image for the profile banner
+ASSET_BANNER = "banner.png" 
+
+#..............IGDB CREDENTIALS
+#to get the IGDB credentials, see https://api-docs.igdb.com/#getting-started
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
+# Data refresh interval time in miliseconds
+REFRESH_INTERVAL = 86400000 
+
+#..............MONGODB CREDENTIALS
+MONGO_URI = 
+#.............. VIRUSTOTAL CREDENTIALS: https://docs.virustotal.com/ 
+#https://www.virustotal.com/gui/user/{yourUser}/apikey
+VT_API_KEY= 
+#activate or deactivate virusTotal
+USE_VT = false 

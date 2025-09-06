@@ -19,10 +19,11 @@ Clone the repository:
 ```bash
 git clone https://github.com/Game-Save-DataBase/GSDB_Server.git
 ```
-
+Search for the file `/.env example`. You must fill the empty variables with the environment variables needed. Rename the file to `.env` after.
 > [!WARNING]  
-> To run the application correctly, the `.env` file must be filled in with the required secret and user keys.  
-> To access them, check the documentation provided in the `.env` file itself.
+> To run the application correctly, the `.env` file must be filled in with the required secret and user keys. 
+> To access them, check the documentation provided in the `.env` file itself for each field.
+> We provide the required file in  `/.env example`, which needs to be renamed to `.env` after each , 
 
 
 Then, in the project root, install the required dependencies:
