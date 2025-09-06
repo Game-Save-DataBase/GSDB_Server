@@ -23,7 +23,7 @@ Search for the file `/.env example`. You must fill the empty variables with the 
 > [!WARNING]  
 > To run the application correctly, the `.env` file must be filled in with the required secret and user keys. 
 > To access them, check the documentation provided in the `.env` file itself for each field.
-> We provide the required file in  `/.env example`, which needs to be renamed to `.env` after each , 
+> We provide the required file in  `/.env example`, which needs to be renamed to `.env` after. 
 
 
 Then, in the project root, install the required dependencies:
