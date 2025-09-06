@@ -22,7 +22,7 @@ async function getAccessToken() {
 
   accessToken = response.access_token;
   expiresAt = now + response.expires_in * 1000 - 60 * 1000;
-  console.log(accessToken)
+  console.log("IGDB access token:", accessToken)
 
   return accessToken;
 }

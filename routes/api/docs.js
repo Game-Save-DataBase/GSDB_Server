@@ -13,7 +13,6 @@ const devMode = process.env.DEV_MODE === 'true';
  *       200:
  *         description: Successful test response
  */
-
 /**
  * @openapi
  * /games:
@@ -56,12 +55,14 @@ const devMode = process.env.DEV_MODE === 'true';
  *         name: external
  *         schema:
  *           type: boolean
- *         description: If true, searches external IGDB API when local results are insufficient (default: true)
+ *         description: >
+ *           If true, searches external IGDB API when local results are insufficient (default: true)
  *       - in: query
  *         name: complete
  *         schema:
  *           type: boolean
- *         description: Whether to include full game info (default: true)
+ *         description: >
+ *           Whether to include full game info (default: true)
  *     responses:
  *       200:
  *         description: Array of game objects or single game

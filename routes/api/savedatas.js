@@ -331,7 +331,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       archive.finalize();
     });
 
-    console.log("Proceso asincrono iniciado")
+    console.log("Proceso asincrono de subida de archivos de guardado iniciado")
     await sendNotification({
       userIDs: user.userID,
       type: 3,
@@ -399,7 +399,7 @@ async function asyncProcessSaveFileUpload(file, user, body, screenshots = []) {
       args: { savedata: tempSaveData, game: game.data }
     });
 
-    console.log("Proceso asincrono finalizado sin errores")
+    console.log("Proceso asincrono de subida de archivo de guardado finalizado sin errores")
 
   } catch (error) {
     console.error("Error en proceso asíncrono de subida:", error);

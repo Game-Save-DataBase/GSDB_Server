@@ -40,6 +40,121 @@
         }
       }
     },
+    "/games": {
+      "get": {
+        "summary": "Search games",
+        "description": "Search games by multiple query filters. Supports MongoDB query operands. Can search local database and external IGDB API.",
+        "tags": [
+          "Games"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Search keyword (optional)"
+          },
+          {
+            "in": "query",
+            "name": "platformID",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Filter by platform ID (optional)"
+          },
+          {
+            "in": "query",
+            "name": "release_date",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter by release date (optional)"
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Maximum number of results (optional)"
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Offset for pagination (optional)"
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "type": "object"
+            },
+            "description": "Sort field and order (optional)"
+          },
+          {
+            "in": "query",
+            "name": "external",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "If true, searches external IGDB API when local results are insufficient (default: true)\n"
+          },
+          {
+            "in": "query",
+            "name": "complete",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Whether to include full game info (default: true)\n"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of game objects or single game"
+          },
+          "204": {
+            "description": "No coincidences found"
+          },
+          "400": {
+            "description": "Invalid query"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a game",
+        "description": "Delete a game by its ID. Requires authentication and dev mode.",
+        "tags": [
+          "Games"
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Game ID to delete"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Game deleted successfully"
+          },
+          "400": {
+            "description": "Missing or invalid game ID"
+          },
+          "404": {
+            "description": "Game not found"
+          }
+        }
+      }
+    },
     "/games/search": {
       "get": {
         "summary": "Search games by keyword",
@@ -150,37 +265,6 @@
           },
           "404": {
             "description": "No games found"
-          }
-        }
-      }
-    },
-    "/games": {
-      "delete": {
-        "summary": "Delete a game",
-        "description": "Delete a game by its ID. Requires authentication and dev mode.",
-        "tags": [
-          "Games"
-        ],
-        "parameters": [
-          {
-            "in": "query",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer"
-            },
-            "description": "Game ID to delete"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Game deleted successfully"
-          },
-          "400": {
-            "description": "Missing or invalid game ID"
-          },
-          "404": {
-            "description": "Game not found"
           }
         }
       }

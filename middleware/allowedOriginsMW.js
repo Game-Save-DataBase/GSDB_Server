@@ -3,9 +3,7 @@ const origins = (process.env.NODE_ENV === 'production') ?
 
 module.exports = function allowedOriginsMW(req, res, next) {
   const origin = req.get('origin');
-  console.log(origin, origins)
   if (!origin || !origins.includes(origin)) {
-    console.log("nope")
     return res.status(403).json({ error: 'Not allowed origin' });
   }
   next();

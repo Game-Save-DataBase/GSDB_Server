@@ -107,6 +107,7 @@ connectDB()
       } catch (err) {
         console.error('Error refrescando datos iniciales:', err);
       }
+        console.log('server running!');
 
       setInterval(async () => {
         try {

@@ -127,9 +127,6 @@ UserSchema.pre('save', async function (next) {
         return next(err);
       }
 
-      if (original !== this.userName) {
-        console.log(`Normalizado userName: ${original} -> ${this.userName}`);
-      }
     } if (this.isModified('admin')){
       this.verified = true; this.banned = false; this.softban = false; this.trusted=true;
     }

@@ -73,7 +73,6 @@ SavesSchema.post('deleteOne', { document: false, query: true }, async function (
     // Restar likes y dislikes al dueño del save
     const user = await Users.findOne({ userID: saveToDelete.userID });
     if (user) {
-      console.log("borrando likes y dislikes")
       user.nLikes -= saveToDelete.likes.length;
       user.nDislikes -= saveToDelete.dislikes.length;
       if (user.nLikes < 0) user.nLikes = 0;
@@ -135,7 +134,6 @@ SavesSchema.post('deleteMany', async function () {
       for (const save of this._savesDataToAdjust) {
         const user = await Users.findOne({ userID: save.userID });
         if (user) {
-          console.log("borrando likes y dislikes")
           user.nLikes -= save.likes.length;
           user.nDislikes -= save.dislikes.length;
           if (user.nLikes < 0) user.nLikes = 0;
