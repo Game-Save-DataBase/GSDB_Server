@@ -1,27 +1,89 @@
-#THIS IS FILE REQUIRES TO FILL ALL THE VARIABLES TO RUN THE SERVER AND TO BE RENAMED TO ".env" 
+#THIS FILE REQUIRES ALL VARIABLES TO BE FILLED IN TO RUN THE SERVER AND TO BE RENAMED TO ".env" 
+#The parameters that must be filled in for proper functioning are the private keys to access VirusTotal, IGDB, and MongoDB.
+#Additionally, private keys must be generated for use in GSDB.
+#To know how to obtain each of the required private keys, go to the introduction section in GSDB Wiki or follow the steps in this same file.
+#https://github.com/Game-Save-DataBase/GSDB_Server/wiki
+#Once all the necessary information is filled in, this file must be renamed to ".env" and placed in the root of the project.
 
 API_VERSION = 0.1
+#---------------------------------------------------------PRIVATE KEYS AND CONNECTIONS-------------------------------------------------------------
+
 #...............GSDB SECRET KEYS
-#generated using openssl rand -hex 32
+#To generate GSDB private keys it is recommended to use the following bash command:
+#> openssl rand -hex 32
+#These keys must not be extracted from any service as they are keys generated for the GSDB project.
 
 #for session and encrypting
 SECRET_KEY = 
 #to use in the internal middleware
 INTERNAL_MW_KEY = 
 
+
+#..............MONGODB CREDENTIALS
+#To connect to the MongoDB database you need to set the connection string. The connection may change depending of the setup:
+#- MongoDB Atlas (free cloud service from MongoDB) -> example: mongodb+srv://<username>:<password>@cluster0.abcde.mongodb.net/<database>?retryWrites=true&w=majority
+#- Locally stored MongoDB Database -> example: mongodb://localhost:27017/gsdb
+#- Stored in VPS or personal server -> example: mongodb://<username>:<password>@<ip-or-domain>:<port>/<database>?authSource=admin
+
+#To store GSDB data in MongoDB Atlas (version used in the delivered version of GSDB), the following steps must be followed:
+#1. Create an account in MongoDB Atlas https://www.mongodb.com/products/platform/atlas-database 
+#2. Create a free cluster, and in the menu access the Connect option
+#3. Select the "connect your application" option to obtain the connection string.
+
+#To learn more about the mongoDB connection strings, check https://www.mongodb.com/docs/manual/reference/connection-string/
+MONGO_URI =
+
+
+#..............IGDB CREDENTIALS
+#To connect with IGDB you must follow the steps mentioned in IGDB API Docs. 
+#IGDB uses a connection through https://dev.twitch.tv/, so you must access the portal and register the application to generate the Client ID and Client Secret codes.
+#For more detailed information, read https://api-docs.igdb.com/#getting-started
+TWITCH_CLIENT_ID=
+TWITCH_CLIENT_SECRET=
+
+ 
+#.............. VIRUSTOTAL CREDENTIALS
+#To connect with VirusTotal you must create an account in their service and access the user profile. https://www.virustotal.com/gui/user/{yourUser}/apikey, where {yourUser} is the username of the registered account.
+#For more information, visit https://docs.virustotal.com/ 
+VT_API_KEY= 
+
+
 #...............GSDB CONNECTION AND PARAMETERS
-#'development', 'production'
-NODE_ENV = 'development' 
-#GSDB prod domain
+
+#GSDB production domain. This is the url that will be used to host GSDB Server in production mode.
 DIR_GSDB_PROD =  
+#GSDB development domain. This is the url that will be used to host GSDB Server in development mode.
 #to build the local domain, use the base and port parameters. Example: http://localhost:8082
 DIR_GSDB = 
 PORT = 
-#allowed origins for development and production modes. http://localhost:8082, http://localhost:3000 
+#allowed origins for development and production modes. Examples: http://localhost:8082, http://localhost:3000.
+#GSDB Local domain must be listed in. 
 DEV_ORIGINS=
 PROD_ORIGINS=
+
+
+#---------------------------------------------------------PARAMETERS-------------------------------------------------------------
+#These parameters can be changed at the user's preference
+#'development', 'production'
+NODE_ENV = 'development' 
+#...............ASSETS -> FILE NAMES OF EACH IMAGE LOCATED IN THE DEFAULTS FOLDER
+#image for the game cover
+ASSET_GAMECOVER = "gameCover.png" 
+#image for the profile picture
+ASSET_PFP = "pfp.png"
+#image for the profile banner
+ASSET_BANNER = "banner.png" 
+
+# Data refresh interval time in milliseconds
+REFRESH_INTERVAL = 86400000 
+#activate or deactivate virusTotal
+USE_VT = false 
 #used in middleware
 DEV_MODE = true 
+
+#---------------------------------------------------------FOLDER LOCATIONS-------------------------------------------------------------
+#Here persistent storage is saved. The base path will be DIR_ASSETS, and the following paths will be built on top of it. 
+#The paths are built in the config.js file. For more information on how these variables are used, check that file.
 
 #...............FOLDER LOCATIONS
 #base
@@ -30,12 +92,11 @@ DIR_ASSETS = "/assets"
 DIR_UPLOADS = '/uploads'
 #DIR_ASSETS/users
 DIR_USERS = '/users' 
-#DIR_ASSETS/games
-DIR_GAMES='/games' 
 #DIR_ASSETS/default
 DIR_DEFAULT = "/default"
 
-#..............API ROUTES
+#---------------------------------------------------------API ROUTING-------------------------------------------------------------
+#Routes for API access. The routes are built in the config.js file. For more information on how these variables are used, check that file.
 #base
 API = "/api" 
 #DIR_GSDB/api/games
@@ -51,25 +112,3 @@ API_INFO = "/info"
 API_TAGS = "/tags"
 API_ASSETS = "/assets"
 API_APIKEYS = "/apikeys"
-#...............ASSETS -> FILE NAMES OF EACH IMAGE LOCATED IN THE DEFAULTS FOLDER
-#image for the game cover
-ASSET_GAMECOVER = "gameCover.png" 
- #image for the profile picture
-ASSET_PFP = "pfp.png"
-#image for the profile banner
-ASSET_BANNER = "banner.png" 
-
-#..............IGDB CREDENTIALS
-#to get the IGDB credentials, see https://api-docs.igdb.com/#getting-started
-TWITCH_CLIENT_ID=
-TWITCH_CLIENT_SECRET=
-# Data refresh interval time in miliseconds
-REFRESH_INTERVAL = 86400000 
-
-#..............MONGODB CREDENTIALS
-MONGO_URI = 
-#.............. VIRUSTOTAL CREDENTIALS: https://docs.virustotal.com/ 
-#https://www.virustotal.com/gui/user/{yourUser}/apikey
-VT_API_KEY= 
-#activate or deactivate virusTotal
-USE_VT = false 
