@@ -10,10 +10,11 @@ Access to GSDB Web Repo:
 
 ## API Documentation
 The full API is documented using [Swagger](https://swagger.io/). You can explore and test endpoints in the [GSDB API Docs](https://gsdb-server.onrender.com/docs).
-To see the different database fields and learn how to use query parameters for filtering and sorting, see the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki).
+To see the different database fields and learn how to use query parameters for filtering and sorting, see the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki/API).
 
 
 ## How to run the source code
+For more detailed information, check the [GSDB Wiki](https://github.com/Game-Save-DataBase/GSDB_Server/wiki/Cloning).
 Before cloning the repository, you need to install [Node.js](https://nodejs.org/es).
 
 Clone the repository:
